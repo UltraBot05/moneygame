@@ -22,7 +22,7 @@ Reviewer: READY_FOR_REVIEW -> DONE/CHANGES_REQUESTED/ARCHITECTURE_BLOCKED
 |---|---|---|---|---|
 | GOV-001 | READY_FOR_REVIEW | pnpm strict TypeScript workspace (`app/web`, `app/worker`, `packages/game-core`, `packages/shared`) | — | fresh install + checks |
 | GOV-002 | READY_FOR_REVIEW | CI lint/typecheck/test/build | GOV-001 | intentional failure blocks CI |
-| GOV-003 | TODO | separate Standard/Grand board data dirs/refs | GOV-001 | immutable refs; no slider |
+| GOV-003 | READY_FOR_REVIEW | separate Standard/Grand board data dirs/refs | GOV-001 | immutable refs; no slider |
 
 ---
 
