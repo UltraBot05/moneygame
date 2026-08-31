@@ -1,0 +1,7 @@
+{
+  "ref": "world-tour-standard@1",
+  "boardId": "world-tour-standard",
+  "boardVersion": 1,
+  "tileCount": 40,
+  "recommendedPlayers": { "min": 3, "max": 6 }
+}

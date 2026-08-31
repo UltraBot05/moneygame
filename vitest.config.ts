@@ -1,11 +1,10 @@
 import { defineConfig } from "vitest/config";
 
-// Single source of test config for the monorepo. GOV-001 is bootstrap only, so
-// there is no game logic to test yet; the runner still runs green so the
-// `pnpm test` check is wired for later tasks.
+// Root test config. Tests live in package source and run in the default (node)
+// environment, which suits the pure game-core logic; a jsdom project can be
+// added when UI tests arrive.
 export default defineConfig({
   test: {
-    projects: ["packages/*"],
-    passWithNoTests: true,
+    include: ["packages/*/src/**/*.test.ts"],
   },
 });
