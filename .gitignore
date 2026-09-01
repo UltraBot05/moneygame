@@ -1,6 +1,10 @@
 node_modules/
 dist/
 .wrangler/
+
+# SPIKE-003: local OAuth secrets (client secret, session secret). Never commit.
+.dev.vars
+**/.dev.vars
 *.tsbuildinfo
 .DS_Store
 

@@ -2,6 +2,6 @@
   "extends": "../../tsconfig.base.json",
   // Test files run under Node (vitest) and use Node built-ins; they are not part
   // of the workerd runtime build, so they are excluded from this Worker typecheck.
-  "exclude": ["src/**/*.test.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.testkit.ts"],
   "include": ["src", "worker-configuration.d.ts"]
 }
