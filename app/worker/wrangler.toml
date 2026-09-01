@@ -2,11 +2,26 @@ name = "moneygame-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
+# Public (non-secret) config. GOOGLE_CLIENT_SECRET and SESSION_SECRET are
+# secrets — set via `.dev.vars` locally / `wrangler secret put` in deployment —
+# and are intentionally NOT vars (a var/secret name clash is rejected).
+[vars]
+GOOGLE_CLIENT_ID = "510130447002-l8pgtjl4nau054tfao7go633p84n6s96.apps.googleusercontent.com"
+
 # SPIKE-001: one SQLite-backed Durable Object per room.
 [[durable_objects.bindings]]
 name = "SPIKE_ROOM"
 class_name = "SpikeRoom"
 
+# SPIKE-003: one SQLite-backed Durable Object holding OAuth transaction state.
+[[durable_objects.bindings]]
+name = "AUTH_STORE"
+class_name = "AuthStore"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SpikeRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["AuthStore"]

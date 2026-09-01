@@ -79,7 +79,7 @@ Acceptance:
 
 ## SPIKE-003 — Google OIDC invite-first
 
-**Status:** TODO
+**Status:** READY_FOR_REVIEW
 **Depends:** GOV-001
 
 Acceptance:
