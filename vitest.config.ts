@@ -5,6 +5,9 @@ import { defineConfig } from "vitest/config";
 // added when UI tests arrive.
 export default defineConfig({
   test: {
-    include: ["packages/*/src/**/*.test.ts"],
+    include: [
+      "packages/*/src/**/*.test.ts",
+      "app/worker/src/**/*.test.ts",
+    ],
   },
 });

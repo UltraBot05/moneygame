@@ -1,3 +1,12 @@
 name = "moneygame-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+
+# SPIKE-001: one SQLite-backed Durable Object per room.
+[[durable_objects.bindings]]
+name = "SPIKE_ROOM"
+class_name = "SpikeRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SpikeRoom"]

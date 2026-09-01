@@ -8,7 +8,9 @@ export default tseslint.config(
   {
     ignores: [
       "**/dist/**",
+      "**/.wrangler/**",
       "app/worker/worker-configuration.d.ts",
+      "app/worker/scripts/**",
     ],
   },
   js.configs.recommended,

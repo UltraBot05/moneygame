@@ -1,10 +1,18 @@
 import { PROTOCOL_VERSION } from "@moneygame/shared";
+import { SpikeRoom } from "./room";
 
-// Minimal Worker entry. Durable Objects, auth, and realtime are later tasks
-// (SPIKE-001+); this only proves the worker builds and shares the protocol
-// definition with the client.
+// The DO class must be exported from the Worker entry module.
+export { SpikeRoom };
+
+// SPIKE-001 Worker: routes a WebSocket upgrade to one room Durable Object.
+// Durable Objects, auth and realtime for the real game arrive in RT-* tasks.
 export default {
-  fetch(): Response {
-    return Response.json({ protocolVersion: PROTOCOL_VERSION });
+  async fetch(request: Request, env: Env): Promise<Response> {
+    if (request.headers.get("Upgrade") === "websocket") {
+      const room = new URL(request.url).searchParams.get("room") ?? "spike";
+      return env.SPIKE_ROOM.getByName(room).fetch(request);
+    }
+    // Health endpoint (no DO involved) — confirms the Worker is up.
+    return Response.json({ ok: true, protocolVersion: PROTOCOL_VERSION });
   },
-} satisfies ExportedHandler;
+} satisfies ExportedHandler<Env>;

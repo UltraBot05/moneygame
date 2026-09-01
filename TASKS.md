@@ -32,7 +32,7 @@ Reviewer: READY_FOR_REVIEW -> DONE/CHANGES_REQUESTED/ARCHITECTURE_BLOCKED
 
 ## SPIKE-001 — DO hibernation + 10 clients
 
-**Status:** TODO
+**Status:** READY_FOR_REVIEW
 **Depends:** GOV-001
 
 Build minimal deployed room:
