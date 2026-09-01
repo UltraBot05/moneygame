@@ -32,7 +32,7 @@ Reviewer: READY_FOR_REVIEW -> DONE/CHANGES_REQUESTED/ARCHITECTURE_BLOCKED
 
 ## SPIKE-001 — DO hibernation + 10 clients
 
-**Status:** READY_FOR_REVIEW
+**Status:** DONE
 **Depends:** GOV-001
 
 Build minimal deployed room:
@@ -79,7 +79,7 @@ Acceptance:
 
 ## SPIKE-003 — Google OIDC invite-first
 
-**Status:** READY_FOR_REVIEW
+**Status:** DONE
 **Depends:** GOV-001
 
 Acceptance:
