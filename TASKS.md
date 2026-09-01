@@ -58,7 +58,7 @@ Deliver `docs/spikes/SPIKE-001-results.md`.
 
 ## SPIKE-002 — Persistence fault injection
 
-**Status:** TODO
+**Status:** READY_FOR_REVIEW
 **Depends:** SPIKE-001
 
 Fault points:
