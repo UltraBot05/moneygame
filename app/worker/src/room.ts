@@ -1,4 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
+import {
+  DEADLINES_SCHEMA,
+  ensureSchema,
+  handleIncrement,
+  resolveDueAlarm,
+  type SqlDb,
+} from "./transition";
 
 /**
  * SPIKE-001 room. NOT the production game runtime — a minimal authoritative
@@ -26,16 +33,12 @@ interface GameStateRow extends Record<string, SqlStorageValue> {
   value: number;
 }
 
-interface IdRow extends Record<string, SqlStorageValue> {
-  id: string;
-}
-
 interface FireAtRow extends Record<string, SqlStorageValue> {
   fire_at: number;
 }
 
 type ClientCommand =
-  | { type: "INCREMENT" }
+  | { type: "INCREMENT"; actionId?: string }
   | { type: "GET_STATE" }
   | { type: "GET_METRICS" }
   | { type: "SET_DEADLINE"; ms: number }
@@ -69,6 +72,7 @@ interface StressMessage {
 
 export class SpikeRoom extends DurableObject<Env> {
   private readonly sql: SqlStorage;
+  private readonly db: SqlDb;
   private rowsRead = 0;
   private rowsWritten = 0;
   private setAlarmCount = 0;
@@ -76,6 +80,7 @@ export class SpikeRoom extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
+    this.db = this.makeDb(ctx);
 
     // Runtime-level ping/pong: keeps connections healthy WITHOUT waking the DO.
     // This is not a JS timer/heartbeat and does not pin the object to memory.
@@ -86,30 +91,45 @@ export class SpikeRoom extends DurableObject<Env> {
     // Reconstruct the durable schema on every wake before any event is handled.
     // Idempotent, so it is safe after hibernation/eviction/restart.
     ctx.blockConcurrencyWhile(async () => {
-      this.exec(
-        `CREATE TABLE IF NOT EXISTS game_state (
-           id INTEGER PRIMARY KEY CHECK (id = 1),
-           game_version INTEGER NOT NULL,
-           value INTEGER NOT NULL
-         );`,
-      );
-      this.exec(
-        `CREATE TABLE IF NOT EXISTS deadlines (
-           id TEXT PRIMARY KEY,
-           fire_at INTEGER NOT NULL,
-           resolved INTEGER NOT NULL DEFAULT 0
-         );`,
-      );
+      // game_state + applied_actions (SPIKE-002 idempotency) + default row.
+      ensureSchema(this.db);
+      this.exec(DEADLINES_SCHEMA);
       // Index the (resolved, fire_at) lookup so pending-deadline queries seek
       // directly to unresolved rows in fire_at order instead of scanning history.
       this.exec(
         `CREATE INDEX IF NOT EXISTS idx_deadlines_pending
            ON deadlines (resolved, fire_at);`,
       );
-      this.exec(
-        `INSERT OR IGNORE INTO game_state (id, game_version, value) VALUES (1, 0, 0);`,
-      );
     });
+  }
+
+  /**
+   * Adapts the DO's `SqlStorage` to the transition module's {@link SqlDb} seam.
+   * `transaction` uses `transactionSync` so the state mutation and its
+   * idempotency record commit atomically (or roll back together). Reads/writes
+   * are tallied into the same SPIKE-001 billing counters.
+   */
+  private makeDb(ctx: DurableObjectState): SqlDb {
+    return {
+      run: (query: string, ...params: (string | number)[]): number => {
+        const cursor = this.sql.exec(query, ...params);
+        cursor.toArray();
+        this.rowsRead += cursor.rowsRead;
+        this.rowsWritten += cursor.rowsWritten;
+        return cursor.rowsWritten;
+      },
+      get: <T extends Record<string, string | number>>(
+        query: string,
+        ...params: (string | number)[]
+      ): T | undefined => {
+        const cursor = this.sql.exec(query, ...params);
+        const rows = cursor.toArray();
+        this.rowsRead += cursor.rowsRead;
+        this.rowsWritten += cursor.rowsWritten;
+        return rows[0] as T | undefined;
+      },
+      transaction: <T>(fn: () => T): T => ctx.storage.transactionSync(fn),
+    };
   }
 
   override async fetch(request: Request): Promise<Response> {
@@ -136,10 +156,31 @@ export class SpikeRoom extends DurableObject<Env> {
       return;
     }
     switch (command.type) {
-      case "INCREMENT":
-        // Persist-before-broadcast: commit returns the authoritative state.
-        this.broadcast(this.commitIncrement());
+      case "INCREMENT": {
+        // Persist-before-broadcast, idempotent by actionId (ADR-003). A retry
+        // of the same actionId does not re-apply or advance gameVersion, and
+        // never broadcasts its (possibly stale) historical snapshot — the
+        // requester just gets the CURRENT authoritative state. A client that
+        // sends no actionId gets a fresh action.
+        const actionId = command.actionId ?? crypto.randomUUID();
+        const outcome = handleIncrement(this.db, actionId);
+        if (outcome.broadcast !== null) {
+          this.broadcast({
+            type: "STATE",
+            gameVersion: outcome.broadcast.gameVersion,
+            value: outcome.broadcast.value,
+          });
+        } else {
+          ws.send(
+            JSON.stringify({
+              type: "STATE",
+              gameVersion: outcome.current.gameVersion,
+              value: outcome.current.value,
+            }),
+          );
+        }
         return;
+      }
       case "SET_DEADLINE":
         await this.scheduleDeadline(command.ms);
         return;
@@ -164,18 +205,17 @@ export class SpikeRoom extends DurableObject<Env> {
   }
 
   override async alarm(): Promise<void> {
-    const now = Date.now();
-    // Only unresolved, due rows are read (indexed). An already-resolved deadline
-    // is never returned, so an at-least-once retry cannot double-apply.
-    const due = this.exec<IdRow>(
-      `SELECT id FROM deadlines WHERE resolved = 0 AND fire_at <= ?;`,
-      now,
-    );
-    if (due.length > 0) {
-      for (const row of due) {
-        this.exec(`UPDATE deadlines SET resolved = 1 WHERE id = ?;`, row.id);
-      }
-      this.broadcast(this.commitIncrement());
+    // Resolve every due deadline AND advance canonical state in one atomic
+    // transaction (SPIKE-002 B2). A crash cannot leave a deadline resolved
+    // without its state change; the resolved=0 guard makes replay idempotent.
+    // Broadcast only after the transaction commits.
+    const outcome = resolveDueAlarm(this.db, Date.now());
+    if (outcome.broadcast !== null) {
+      this.broadcast({
+        type: "STATE",
+        gameVersion: outcome.broadcast.gameVersion,
+        value: outcome.broadcast.value,
+      });
     }
     // Reschedule the earliest remaining deadline; if none remain, the just-fired
     // alarm is consumed and no new alarm is left behind.
@@ -197,17 +237,6 @@ export class SpikeRoom extends DurableObject<Env> {
   private readState(): StateMessage {
     const [row] = this.exec<GameStateRow>(
       `SELECT game_version, value FROM game_state WHERE id = 1;`,
-    );
-    if (row === undefined) throw new Error("game_state row missing");
-    return { type: "STATE", gameVersion: row.game_version, value: row.value };
-  }
-
-  private commitIncrement(): StateMessage {
-    const [row] = this.exec<GameStateRow>(
-      `UPDATE game_state
-         SET game_version = game_version + 1, value = value + 1
-         WHERE id = 1
-         RETURNING game_version, value;`,
     );
     if (row === undefined) throw new Error("game_state row missing");
     return { type: "STATE", gameVersion: row.game_version, value: row.value };
