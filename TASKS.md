@@ -93,7 +93,7 @@ Acceptance:
 
 ## SPIKE-004 — Reconnect + epoch
 
-**Status:** TODO
+**Status:** DONE
 **Depends:** SPIKE-001,003
 
 Acceptance:
@@ -110,7 +110,7 @@ Acceptance:
 
 ## SPIKE-005 — Rematch/board contamination
 
-**Status:** TODO
+**Status:** DONE
 **Depends:** GOV-003
 
 Run hundreds+ deterministic:

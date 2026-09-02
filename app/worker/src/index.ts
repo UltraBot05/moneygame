@@ -8,6 +8,11 @@ import type {
 } from "./auth-store";
 import { createGoogleProvider } from "./oidc";
 import { handleCallback, startAuth, type FlowDeps } from "./auth-flow";
+import { parseCookies, verifySession, SESSION_COOKIE } from "./session";
+
+/** Internal header carrying the Worker-verified userId to the DO. Set only by
+ *  the Worker from the session; any client-supplied value is overwritten. */
+const USER_HEADER = "x-mg-user";
 
 // DO classes must be exported from the Worker entry module.
 export { SpikeRoom, AuthStore };
@@ -48,8 +53,27 @@ function flowDeps(env: Env): FlowDeps {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.headers.get("Upgrade") === "websocket") {
+      // SPIKE-004: the game socket is authenticated. Derive the trusted userId
+      // from the verified first-party session server-side — never from a
+      // query-string/body userId or IP. Google tokens never reach the DO.
+      const token = parseCookies(request.headers.get("Cookie"))[SESSION_COOKIE];
+      if (token === undefined) {
+        return new Response("authentication required", { status: 401 });
+      }
+      let userId: string;
+      try {
+        userId = (await verifySession(token, env.SESSION_SECRET, Date.now())).sub;
+      } catch {
+        return new Response("authentication required", { status: 401 });
+      }
       const room = new URL(request.url).searchParams.get("room") ?? "spike";
-      return env.SPIKE_ROOM.getByName(room).fetch(request);
+      // Overwrite any client-supplied header so identity cannot be spoofed; the
+      // DO is only reachable through this authenticated Worker path.
+      const headers = new Headers(request.headers);
+      headers.set(USER_HEADER, userId);
+      return env.SPIKE_ROOM.getByName(room).fetch(
+        new Request(request, { headers }),
+      );
     }
 
     const url = new URL(request.url);
