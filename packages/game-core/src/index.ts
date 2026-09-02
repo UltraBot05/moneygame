@@ -25,3 +25,6 @@ export interface BoardDefinition {
   readonly tileCount: number;
   readonly recommendedPlayers: RecommendedPlayers;
 }
+
+// SPIKE-005 fresh-game / rematch isolation core.
+export * from "./game";

@@ -1,51 +1,80 @@
 import { DurableObject } from "cloudflare:workers";
+import standardBoard from "../../../boards/world-tour/standard.json";
+import grandBoard from "../../../boards/world-tour/grand.json";
 import {
-  DEADLINES_SCHEMA,
+  checkGameScoped,
+  currentGameId,
   ensureSchema,
+  grantTurnExtension,
   handleIncrement,
+  readState,
   resolveDueAlarm,
+  setActiveTurn,
+  startGame,
+  type NewGame,
   type SqlDb,
 } from "./transition";
+import {
+  ACTIVE_TURN_RECONNECT_EXTENSION_MS,
+  connectSeat,
+  disconnectSeat,
+  ensureSeatSchema,
+  isCurrentEpoch,
+} from "./seats";
 
 /**
- * SPIKE-001 room. NOT the production game runtime — a minimal authoritative
- * counter used to falsify/validate the Cloudflare room runtime:
- *   Worker -> one SQLite-backed DO -> Hibernation WS API -> persisted state
- *   -> Alarm API -> wake/reconstruction.
+ * SPIKE-001 room, extended for SPIKE-004 (authenticated reconnect + connection
+ * epoch, room-scoped) and SPIKE-005 (rematch / game-scoped isolation).
  *
- * Rules proven here:
- *  - SQLite is the durable source of truth (no in-memory state is authoritative);
- *  - authoritative state is persisted BEFORE it is broadcast;
- *  - ALL pending absolute deadlines are persisted; the Alarm API is always
- *    scheduled for the EARLIEST unresolved one (ARCHITECTURE.md §8);
- *  - deadline scheduling/resolution query `resolved = 0` rows only, using an
- *    index, so reads do NOT grow with resolved history;
- *  - alarm resolution is idempotent (at-least-once delivery safe);
- *  - no gameplay setTimeout/setInterval/heartbeat/keep-warm loop.
- *
- * The `rowsRead`/`rowsWritten`/`setAlarmCount` tallies exist for SPIKE-001
- * resource measurement: `SqlStorageCursor.rowsRead`/`.rowsWritten` are the exact
- * values Cloudflare bills for SQL, and `setAlarm()` is billed as one row write.
+ * NOT the production game runtime — a minimal authoritative counter used to
+ * falsify/validate the Cloudflare runtime. Identity is the internal `userId`
+ * derived by the Worker from the verified first-party session (SPIKE-003) and
+ * handed in via the `x-mg-user` header on the internal upgrade subrequest; the
+ * DO is not publicly addressable, and the Worker always overwrites that header
+ * from the session, so a public request cannot spoof it. Google tokens never
+ * reach the DO. Each socket's hibernation attachment carries only a
+ * non-authoritative `{ userId, epoch }` — every command re-validates the epoch
+ * against durable SQLite, so a stale socket (even one that survived hibernation)
+ * cannot mutate state.
  */
 
-interface GameStateRow extends Record<string, SqlStorageValue> {
-  game_version: number;
-  value: number;
+/** Immutable board identity the runtime records with each game (from canonical JSON). */
+interface BoardIdentity {
+  boardId: string;
+  boardVersion: number;
+  tileCount: number;
+}
+
+const BOARDS: Record<string, BoardIdentity> = {
+  standard: standardBoard,
+  grand: grandBoard,
+};
+
+const SESSION_REPLACED = JSON.stringify({ type: "SESSION_REPLACED" });
+
+interface SocketAttachment {
+  userId: string;
+  epoch: number;
 }
 
 interface FireAtRow extends Record<string, SqlStorageValue> {
   fire_at: number;
 }
 
+// Every game-scoped mutation carries the originating `gameId` (validated against
+// current_game_id before any write); GET_* are read-only and need none.
 type ClientCommand =
-  | { type: "INCREMENT"; actionId?: string }
+  | { type: "INCREMENT"; actionId?: string; gameId?: string }
   | { type: "GET_STATE" }
   | { type: "GET_METRICS" }
-  | { type: "SET_DEADLINE"; ms: number }
-  | { type: "DEADLINE_STRESS"; resolved: number; pending: number };
+  | { type: "SET_DEADLINE"; ms: number; gameId?: string }
+  | { type: "SET_TURN"; turnId: string; ms: number; gameId?: string }
+  | { type: "REMATCH"; board: "standard" | "grand"; gameId?: string }
+  | { type: "DEADLINE_STRESS"; resolved: number; pending: number; gameId?: string };
 
 interface StateMessage {
   type: "STATE";
+  gameId: string;
   gameVersion: number;
   value: number;
 }
@@ -82,33 +111,26 @@ export class SpikeRoom extends DurableObject<Env> {
     this.sql = ctx.storage.sql;
     this.db = this.makeDb(ctx);
 
-    // Runtime-level ping/pong: keeps connections healthy WITHOUT waking the DO.
-    // This is not a JS timer/heartbeat and does not pin the object to memory.
+    // Runtime-level ping/pong keeps connections healthy WITHOUT waking the DO.
     ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair("ping", "pong"),
     );
 
-    // Reconstruct the durable schema on every wake before any event is handled.
-    // Idempotent, so it is safe after hibernation/eviction/restart.
     ctx.blockConcurrencyWhile(async () => {
-      // game_state + applied_actions (SPIKE-002 idempotency) + default row.
-      ensureSchema(this.db);
-      this.exec(DEADLINES_SCHEMA);
-      // Index the (resolved, fire_at) lookup so pending-deadline queries seek
-      // directly to unresolved rows in fire_at order instead of scanning history.
+      ensureSchema(this.db); // room_state + games + game_state + applied_actions + deadlines + turns
+      ensureSeatSchema(this.db); // room-scoped seats
       this.exec(
         `CREATE INDEX IF NOT EXISTS idx_deadlines_pending
-           ON deadlines (resolved, fire_at);`,
+           ON deadlines (game_id, resolved, fire_at);`,
       );
+      // Bootstrap a first game so the room is usable; a REMATCH replaces it.
+      if (currentGameId(this.db) === null) {
+        startGame(this.db, this.newGame("standard"), Date.now());
+      }
     });
   }
 
-  /**
-   * Adapts the DO's `SqlStorage` to the transition module's {@link SqlDb} seam.
-   * `transaction` uses `transactionSync` so the state mutation and its
-   * idempotency record commit atomically (or roll back together). Reads/writes
-   * are tallied into the same SPIKE-001 billing counters.
-   */
+  /** Adapts the DO's `SqlStorage` to the {@link SqlDb} seam (atomic via `transactionSync`). */
   private makeDb(ctx: DurableObjectState): SqlDb {
     return {
       run: (query: string, ...params: (string | number)[]): number => {
@@ -118,7 +140,7 @@ export class SpikeRoom extends DurableObject<Env> {
         this.rowsWritten += cursor.rowsWritten;
         return cursor.rowsWritten;
       },
-      get: <T extends Record<string, string | number>>(
+      get: <T extends Record<string, string | number | null>>(
         query: string,
         ...params: (string | number)[]
       ): T | undefined => {
@@ -132,15 +154,55 @@ export class SpikeRoom extends DurableObject<Env> {
     };
   }
 
+  private newGame(board: "standard" | "grand"): NewGame {
+    const def = BOARDS[board] as BoardIdentity;
+    return {
+      gameId: crypto.randomUUID(),
+      boardId: def.boardId,
+      boardVersion: def.boardVersion,
+      tileCount: def.tileCount,
+    };
+  }
+
   override async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("expected websocket", { status: 426 });
     }
+    // Trusted identity, set by the Worker from the verified session. Absent →
+    // the request did not come through the authenticated Worker path.
+    const userId = request.headers.get("x-mg-user");
+    if (userId === null || userId.length === 0) {
+      return new Response("unauthenticated", { status: 401 });
+    }
+
     const { 0: client, 1: server } = new WebSocketPair();
-    // Hibernation API: the runtime may evict this DO while the socket stays open.
     this.ctx.acceptWebSocket(server);
-    // Give the new client the committed state (also correct after a wake).
-    server.send(JSON.stringify(this.readState()));
+
+    // Advance the seat epoch atomically and bind it to THIS socket.
+    const conn = connectSeat(this.db, userId, Date.now());
+
+    // Fail closed: an expired reconnect lease does NOT reclaim the seat. The
+    // socket receives no authoritative attachment/epoch and is closed cleanly,
+    // so it can neither mutate state nor earn a turn extension. (Re-seat/rejoin
+    // after expiry is later lobby work — deliberately not decided here.)
+    if (!conn.accepted) {
+      server.send(JSON.stringify({ type: "ERROR", code: "RECONNECT_EXPIRED" }));
+      server.close(1008, "reconnect lease expired");
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
+    const attachment: SocketAttachment = { userId, epoch: conn.epoch };
+    server.serializeAttachment(attachment);
+
+    if (conn.replacedLiveSocket && conn.replacedEpoch !== null) {
+      this.replaceOldSockets(userId, conn.replacedEpoch, server);
+    }
+    // A genuine within-lease reconnect by the active-turn owner earns the +20s.
+    if (conn.kind === "RECONNECT") {
+      this.maybeExtendActiveTurn(userId);
+    }
+
+    server.send(JSON.stringify(this.stateMessage()));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -149,6 +211,15 @@ export class SpikeRoom extends DurableObject<Env> {
     message: string | ArrayBuffer,
   ): Promise<void> {
     if (typeof message !== "string") return;
+    const attachment = ws.deserializeAttachment() as SocketAttachment | null;
+    if (attachment === null) return;
+
+    // Stale-epoch guard: a superseded socket cannot mutate anything.
+    if (!isCurrentEpoch(this.db, attachment.userId, attachment.epoch)) {
+      ws.send(SESSION_REPLACED);
+      return;
+    }
+
     let command: ClientCommand;
     try {
       command = JSON.parse(message) as ClientCommand;
@@ -157,43 +228,72 @@ export class SpikeRoom extends DurableObject<Env> {
     }
     switch (command.type) {
       case "INCREMENT": {
-        // Persist-before-broadcast, idempotent by actionId (ADR-003). A retry
-        // of the same actionId does not re-apply or advance gameVersion, and
-        // never broadcasts its (possibly stale) historical snapshot — the
-        // requester just gets the CURRENT authoritative state. A client that
-        // sends no actionId gets a fresh action.
+        const gameId = this.guard(ws, command.gameId);
+        if (gameId === null) return;
         const actionId = command.actionId ?? crypto.randomUUID();
-        const outcome = handleIncrement(this.db, actionId);
+        const outcome = handleIncrement(this.db, gameId, actionId);
         if (outcome.broadcast !== null) {
-          this.broadcast({
-            type: "STATE",
-            gameVersion: outcome.broadcast.gameVersion,
-            value: outcome.broadcast.value,
-          });
+          this.broadcast(this.stateMessage());
         } else {
-          ws.send(
-            JSON.stringify({
-              type: "STATE",
-              gameVersion: outcome.current.gameVersion,
-              value: outcome.current.value,
-            }),
-          );
+          ws.send(JSON.stringify(this.stateMessage()));
         }
         return;
       }
-      case "SET_DEADLINE":
-        await this.scheduleDeadline(command.ms);
+      case "REMATCH": {
+        // The rematch targets the game the client believes is current; a stale
+        // gameId is rejected here, before any new game is started.
+        if (this.guard(ws, command.gameId) === null) return;
+        // Atomic new-game transition; broadcast the fresh game only after commit.
+        startGame(this.db, this.newGame(command.board), Date.now());
+        this.broadcast(this.stateMessage());
         return;
+      }
+      case "SET_TURN": {
+        const gameId = this.guard(ws, command.gameId);
+        if (gameId === null) return;
+        setActiveTurn(
+          this.db,
+          gameId,
+          command.turnId,
+          attachment.userId,
+          Date.now() + command.ms,
+        );
+        void this.scheduleEarliest();
+        return;
+      }
+      case "SET_DEADLINE": {
+        const gameId = this.guard(ws, command.gameId);
+        if (gameId === null) return;
+        await this.scheduleDeadline(gameId, command.ms);
+        return;
+      }
+      case "DEADLINE_STRESS": {
+        const gameId = this.guard(ws, command.gameId);
+        if (gameId === null) return;
+        ws.send(JSON.stringify(this.runStress(gameId, command.resolved, command.pending)));
+        return;
+      }
       case "GET_STATE":
-        ws.send(JSON.stringify(this.readState()));
+        ws.send(JSON.stringify(this.stateMessage()));
         return;
       case "GET_METRICS":
         ws.send(JSON.stringify(this.readMetrics()));
         return;
-      case "DEADLINE_STRESS":
-        ws.send(JSON.stringify(this.runStress(command.resolved, command.pending)));
-        return;
     }
+  }
+
+  /**
+   * Validates the client-supplied `gameId` for a game-scoped mutation BEFORE any
+   * write: missing → `GAME_ID_REQUIRED`, not-current → `STALE_GAME`. Returns the
+   * validated gameId, or null (after sending the error) to abort the command.
+   */
+  private guard(ws: WebSocket, gameId: string | undefined): string | null {
+    const check = checkGameScoped(this.db, gameId);
+    if (!check.ok) {
+      ws.send(JSON.stringify({ type: "ERROR", code: check.code }));
+      return null;
+    }
+    return check.gameId;
   }
 
   override async webSocketClose(
@@ -201,29 +301,70 @@ export class SpikeRoom extends DurableObject<Env> {
     code: number,
     reason: string,
   ): Promise<void> {
+    const attachment = ws.deserializeAttachment() as SocketAttachment | null;
+    if (attachment !== null) {
+      // Only the CURRENT socket opens a reconnect lease; a stale close is a
+      // no-op inside disconnectSeat, so it cannot disconnect the new socket.
+      disconnectSeat(this.db, attachment.userId, attachment.epoch, Date.now());
+    }
     ws.close(code, reason);
   }
 
   override async alarm(): Promise<void> {
-    // Resolve every due deadline AND advance canonical state in one atomic
-    // transaction (SPIKE-002 B2). A crash cannot leave a deadline resolved
-    // without its state change; the resolved=0 guard makes replay idempotent.
-    // Broadcast only after the transaction commits.
+    // Resolve the CURRENT game's due deadlines + advance state in one atomic
+    // transaction (SPIKE-002 B2); old-game deadlines are in another namespace
+    // and can never fire against the current game (SPIKE-005 E).
     const outcome = resolveDueAlarm(this.db, Date.now());
     if (outcome.broadcast !== null) {
-      this.broadcast({
-        type: "STATE",
-        gameVersion: outcome.broadcast.gameVersion,
-        value: outcome.broadcast.value,
-      });
+      this.broadcast(this.stateMessage());
     }
-    // Reschedule the earliest remaining deadline; if none remain, the just-fired
-    // alarm is consumed and no new alarm is left behind.
     await this.scheduleEarliest();
   }
 
-  /** Runs a statement and tallies the billed SQL row counts. */
-  private exec<T extends Record<string, SqlStorageValue> = GameStateRow>(
+  // --- seat helpers ----------------------------------------------------------
+
+  /** Sends SESSION_REPLACED to and closes every live socket at the old epoch. */
+  private replaceOldSockets(
+    userId: string,
+    oldEpoch: number,
+    keep: WebSocket,
+  ): void {
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws === keep) continue;
+      const att = ws.deserializeAttachment() as SocketAttachment | null;
+      if (att !== null && att.userId === userId && att.epoch === oldEpoch) {
+        try {
+          ws.send(SESSION_REPLACED);
+          ws.close(1000, "session replaced");
+        } catch {
+          // already closing
+        }
+      }
+    }
+  }
+
+  /** Grants the one-time +20s if `userId` owns the current game's active turn. */
+  private maybeExtendActiveTurn(userId: string): void {
+    const gameId = currentGameId(this.db);
+    if (gameId === null) return;
+    const turn = this.exec<{ turn_id: string }>(
+      `SELECT turn_id FROM active_turn WHERE game_id = ?;`,
+      gameId,
+    )[0];
+    if (turn === undefined) return;
+    const result = grantTurnExtension(
+      this.db,
+      gameId,
+      turn.turn_id,
+      userId,
+      ACTIVE_TURN_RECONNECT_EXTENSION_MS,
+    );
+    if (result.granted) void this.scheduleEarliest();
+  }
+
+  // --- game/deadline plumbing ------------------------------------------------
+
+  private exec<T extends Record<string, SqlStorageValue>>(
     query: string,
     ...bindings: SqlStorageValue[]
   ): T[] {
@@ -234,28 +375,35 @@ export class SpikeRoom extends DurableObject<Env> {
     return rows;
   }
 
-  private readState(): StateMessage {
-    const [row] = this.exec<GameStateRow>(
-      `SELECT game_version, value FROM game_state WHERE id = 1;`,
-    );
-    if (row === undefined) throw new Error("game_state row missing");
-    return { type: "STATE", gameVersion: row.game_version, value: row.value };
+  private stateMessage(): StateMessage {
+    const gameId = currentGameId(this.db) ?? "";
+    const state = readState(this.db, gameId);
+    return {
+      type: "STATE",
+      gameId,
+      gameVersion: state.gameVersion,
+      value: state.value,
+    };
   }
 
-  private async scheduleDeadline(ms: number): Promise<void> {
+  private async scheduleDeadline(gameId: string, ms: number): Promise<void> {
     this.exec(
-      `INSERT INTO deadlines (id, fire_at, resolved) VALUES (?, ?, 0);`,
+      `INSERT INTO deadlines (game_id, id, fire_at, resolved) VALUES (?, ?, ?, 0);`,
+      gameId,
       crypto.randomUUID(),
       Date.now() + ms,
     );
-    // Persist all deadlines; schedule whichever is earliest (not necessarily
-    // the one just inserted).
     await this.scheduleEarliest();
   }
 
+  /** Schedules the one DO alarm for the CURRENT game's earliest unresolved deadline. */
   private async scheduleEarliest(): Promise<void> {
+    const gameId = currentGameId(this.db);
+    if (gameId === null) return;
     const [row] = this.exec<FireAtRow>(
-      `SELECT fire_at FROM deadlines WHERE resolved = 0 ORDER BY fire_at LIMIT 1;`,
+      `SELECT fire_at FROM deadlines
+         WHERE game_id = ? AND resolved = 0 ORDER BY fire_at LIMIT 1;`,
+      gameId,
     );
     if (row !== undefined) {
       this.setAlarmCount += 1;
@@ -274,23 +422,25 @@ export class SpikeRoom extends DurableObject<Env> {
   }
 
   /**
-   * SPIKE-001 M2 measurement only: seed a mix of resolved/pending deadlines and
-   * report per-query `cursor.rowsRead`, proving the scheduling/resolution queries
-   * do not scan resolved history.
+   * SPIKE-001 M2 measurement only: seed resolved/pending deadlines for the
+   * current game and report per-query `cursor.rowsRead`, proving the
+   * scheduling/resolution queries do not scan resolved history. Now game-scoped.
    */
-  private runStress(resolved: number, pending: number): StressMessage {
-    this.sql.exec(`DELETE FROM deadlines;`);
+  private runStress(gameId: string, resolved: number, pending: number): StressMessage {
+    this.sql.exec(`DELETE FROM deadlines WHERE game_id = ?;`, gameId);
     const base = Date.now();
     for (let i = 0; i < resolved; i++) {
       this.sql.exec(
-        `INSERT INTO deadlines (id, fire_at, resolved) VALUES (?, ?, 1);`,
+        `INSERT INTO deadlines (game_id, id, fire_at, resolved) VALUES (?, ?, ?, 1);`,
+        gameId,
         `r${i}`,
         base + i,
       );
     }
     for (let i = 0; i < pending; i++) {
       this.sql.exec(
-        `INSERT INTO deadlines (id, fire_at, resolved) VALUES (?, ?, 0);`,
+        `INSERT INTO deadlines (game_id, id, fire_at, resolved) VALUES (?, ?, ?, 0);`,
+        gameId,
         `p${i}`,
         base + 1_000_000 + i,
       );
@@ -306,20 +456,24 @@ export class SpikeRoom extends DurableObject<Env> {
       totalRows: resolved + pending,
       resolved,
       pending,
-      readFullScanAll: rowsRead(`SELECT id FROM deadlines;`),
+      readFullScanAll: rowsRead(`SELECT id FROM deadlines WHERE game_id = ?;`, gameId),
       readEarliestPending: rowsRead(
-        `SELECT fire_at FROM deadlines WHERE resolved = 0 ORDER BY fire_at LIMIT 1;`,
+        `SELECT fire_at FROM deadlines WHERE game_id = ? AND resolved = 0 ORDER BY fire_at LIMIT 1;`,
+        gameId,
       ),
       readDuePending: rowsRead(
-        `SELECT id FROM deadlines WHERE resolved = 0 AND fire_at <= ?;`,
+        `SELECT id FROM deadlines WHERE game_id = ? AND resolved = 0 AND fire_at <= ?;`,
+        gameId,
         now,
       ),
       readResolveOne: rowsRead(
-        `UPDATE deadlines SET resolved = 1 WHERE id = ?;`,
+        `UPDATE deadlines SET resolved = 1 WHERE game_id = ? AND id = ?;`,
+        gameId,
         "p0",
       ),
       readNextPending: rowsRead(
-        `SELECT fire_at FROM deadlines WHERE resolved = 0 ORDER BY fire_at LIMIT 1;`,
+        `SELECT fire_at FROM deadlines WHERE game_id = ? AND resolved = 0 ORDER BY fire_at LIMIT 1;`,
+        gameId,
       ),
     };
   }
