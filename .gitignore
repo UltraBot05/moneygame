@@ -20,3 +20,10 @@ app/worker/worker-configuration.d.ts
 
 # Local Claude launch config
 .claude/launch.json
+
+# Local AI / workflow documentation
+/CLAUDE.md
+/IMPLEMENTATION_PLAN.md
+/REVIEW_CHECKLIST.md
+/START_HERE.md
+/.claude/launch.json
