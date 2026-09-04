@@ -132,7 +132,7 @@ Every new game:
 
 ## SPIKE-006 — Dual-board renderer
 
-**Status:** TODO
+**Status:** DONE
 **Depends:** GOV-001,003
 
 Standard 40 + Grand 52 rough renderer.
@@ -148,7 +148,7 @@ Test:
 
 ## SPIKE-007 — Seeded fuzz harness
 
-**Status:** TODO
+**Status:** DONE
 **Depends:** GOV-001
 
 Acceptance:

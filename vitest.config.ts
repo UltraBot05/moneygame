@@ -8,6 +8,8 @@ export default defineConfig({
     include: [
       "packages/*/src/**/*.test.ts",
       "app/worker/src/**/*.test.ts",
+      // Pure (non-DOM) web logic tests, e.g. the SPIKE-006 board layout math.
+      "app/web/src/**/*.test.ts",
     ],
   },
 });

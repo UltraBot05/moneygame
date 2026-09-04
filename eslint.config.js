@@ -11,6 +11,9 @@ export default tseslint.config(
       "**/.wrangler/**",
       "app/worker/worker-configuration.d.ts",
       "app/worker/scripts/**",
+      // Claude Design deliverables: static .dc.html mockups + a generated browser
+      // runtime bundle (docs/support.js). Design artifacts, not app source.
+      "docs/**",
     ],
   },
   js.configs.recommended,
