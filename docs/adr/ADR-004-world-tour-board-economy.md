@@ -61,3 +61,18 @@ Other Mega-inspired modules stay post-launch.
 
 ## Revisit
 Board structure/economy fails simulation or alpha; 6-player crossover changes; pacing test falsifies assumptions.
+
+## ECON-001 reconciliation amendment (proposed, 2026-09-08)
+
+The user authorized this pre-FREEZE reconciliation. It does not accept or freeze this ADR. Canonical candidate tables now live in `boards/world-tour/{standard,grand}.json`, with shared candidate rules in `packages/game-core/src/economy.ts`.
+
+- Standard retains 40/22/8, with Egypt/France low-high pairs and six middle triples.
+- Grand retains 52/30/12, three sets per side, six low-tier pairs plus six high-tier triples.
+- Grand uses two utilities (Power Grid, Water Works); index 31 becomes a fourth Surprise space. Counts sum to 52. This explicitly supersedes the earlier three-utility candidate.
+- Preserve authored prices/rent/build ladders and canonical money ratios; round redemption upward using integer percentages.
+- Propose two development purchases per owner turn, one level/action, with payment and even-build validation on each action. No price/rent uplift.
+- Propose Grand A; isolated B/C rules are defined for comparison, not enabled.
+- Cash custom bound is integer 1500–2500 inclusive. Default remains 2000.
+- Start landing totals 300; passing pays 200; Holding release 50. Core reserved Grand specials and Vacation have zero cash effect. Card content remains provisional and is not promoted from visual placeholders.
+
+See `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md` for exact values, matrix, trade-offs and limitations. Independent review and human approval remain required; FREEZE-001 stays TODO.

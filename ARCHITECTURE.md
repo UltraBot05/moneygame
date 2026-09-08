@@ -91,8 +91,8 @@ world-tour-grand@1
 12 sets
 3 property sets per side
 4 transit hubs
-3 utilities
-3 Surprise
+2 utilities
+4 Surprise
 3 Treasure Chest
 2 Tax
 1 Auction Hub
@@ -101,11 +101,11 @@ world-tour-grand@1
 4 structural corners
 ```
 
-Initial 30-property set hypothesis:
+Pre-FREEZE reconciled 30-property candidate:
 - six 2-property sets;
 - six 3-property sets.
 
-This is not considered balanced until simulation and human playtesting.
+ECON-001 retains the authored low/high cities in the first six tiers and all cities in the last six. Two utilities follow the later Design decision; the old third utility at index 31 becomes Surprise, keeping 52 spaces. See `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md`. Simulation is evidence, not human approval.
 
 Grand's four corner semantics are **not frozen**. They may stay familiar or become more original later.
 
@@ -430,7 +430,7 @@ Budget exhaustion is a board/rules defect and must log enough context/seed to re
 
 # 15. Economy
 
-Standard and Grand have independent authored price/rent tables.
+Standard and Grand have independent authored price/rent tables in `boards/world-tour/standard.json` and `boards/world-tour/grand.json` (`economyProfile`). These are pre-FREEZE candidates, loaded immutably by `packages/game-core/src/economy-candidates.ts`. Full tables, provenance, remaining assumptions and comparison evidence are in `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md`.
 
 Initial reference:
 
@@ -443,7 +443,9 @@ unmortgage = principal + 10%
 building sell-back = 50%
 ```
 
-Host starting cash: 1500 / 2000 / 2500 / bounded custom.
+Host starting cash: 1500 / 2000 / 2500 / custom integer 1500–2500 inclusive (candidate bound).
+
+ECON-001 candidate: at most two paid, even-build level purchases per owner turn, across all sets, while not in debt or Holding. A landmark is level 4 and costs one action. No carryover; each payment and even-build condition is checked separately. Design prices and rent ladders are unchanged. Start pays 200 on passing, 300 total on exact landing (200 salary + 100 bonus). Holding release costs 50; Vacation and reserved Grand specials transfer no cash. Redemption uses integer `ceil(principal * 110 / 100)`, never floating-point `principal * 1.1`.
 
 Balance matrix:
 
@@ -459,6 +461,8 @@ Use distributions, not only averages.
 # 16. Grand pacing
 
 Grand does not automatically need a special pacing mechanic.
+
+ECON-001 proposes A (core) with the shared two-action development rule. B/C remain isolated pre-FREEZE simulation candidates, with exact definitions and evidence in the reconciliation document. Neither is enabled in the production candidate. Claude and human review are still required.
 
 Compare:
 
