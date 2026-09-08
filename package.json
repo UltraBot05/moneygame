@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "build": "pnpm -r --if-present build"
+    "simulate:economy": "node --experimental-strip-types packages/game-core/src/spike-008/economy-cli.ts",
+    "build": "pnpm -r --if-present build",
+    "simulate:reconciliation": "node --experimental-strip-types packages/game-core/src/spike-008/reconciliation-cli.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

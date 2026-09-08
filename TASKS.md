@@ -161,7 +161,7 @@ Acceptance:
 
 ## SPIKE-008 — Economy harness
 
-**Status:** TODO
+**Status:** DONE
 **Depends:** SPIKE-007,GOV-003
 
 Metrics:
@@ -175,10 +175,23 @@ Metrics:
 - rent concentration
 - winner correlations
 
+## ECON-001 — Pre-FREEZE board/economy reconciliation
+
+**Status:** DONE
+**Depends:** SPIKE-008
+
+Reconcile Design and canonical counts/money; publish production candidates; validate bounded pacing and Grand A/B/C over 250 seeds per supported configuration. Preserve private sources and historical evidence. Claude reviews independently.
+
+Evidence and builder handoff: `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md`; full per-configuration report: `docs/architecture/ECON-001-simulation.json`. Default matrix 9/9 PASS; $2500 Grand-10 retains the explicitly recorded small pacing/rent-ratio misses.
+
+**Independent review (2026-09-08, Claude Code): APPROVE.** Reproduced lint/typecheck/test (163/163) /build, the 250-seed reconciliation matrix (candidate 9/9 PASS, one-action isolation, historical baseline) and the $2500 preset caveat exactly. Board/count/money reconciliation verified from source; two-utility conversion and 10×-fresh-dice utility card confirmed against private Design wording; integer redemption fix ($100→$110) verified with regression test. Two-development-per-turn is a legitimate, fully-specified, single-sourced newly-proposed pre-FREEZE candidate (Design authored one) — its strategic side effects and the $2500 Grand-10 miss are documented, non-blocking, and deferred to FREEZE-001 human balance approval. FREEZE-001 remains TODO.
+
 ## FREEZE-001 — Architecture review
 
 **Status:** TODO
-**Depends:** SPIKE-001..008
+**Depends:** SPIKE-001..008, ECON-001
+
+ECON-001 must be independently approved before this review begins. Card-content finalization and human balance approval are explicit review considerations; simulation alone does not freeze the product.
 
 Human + independent Codex:
 
@@ -332,3 +345,10 @@ POST-008 Gift/Choice expansion
 ```
 
 Every module must test interactions with all already-shipped systems it touches.
+
+## Separate product follow-ups
+
+- RULE-011/012: finalize card content independently of visual placeholder values; rerun ECON-001 matrix after changed effects or values.
+- RULE-013: implement full Holding choices/attempts and held release cards; replace the economy bot's pay-on-skipped-turn approximation and rerun balance.
+- GRAND-005/008: human playtest A and review candidate B/C definitions; simulation selection is not human approval.
+- Collusion Guard: separate future product rule/UI task; no backend detection, bailouts or enforcement implemented by ECON-001.

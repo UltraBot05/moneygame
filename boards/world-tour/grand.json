@@ -3,5 +3,918 @@
   "boardId": "world-tour-grand",
   "boardVersion": 1,
   "tileCount": 52,
-  "recommendedPlayers": { "min": 6, "max": 10 }
+  "recommendedPlayers": {
+    "min": 6,
+    "max": 10
+  },
+  "status": "PRE_FREEZE_CANDIDATE",
+  "economyProfile": {
+    "kind": "grand",
+    "ref": "world-tour-grand@1",
+    "tileCount": 52,
+    "recommendedPlayers": {
+      "min": 6,
+      "max": 10
+    },
+    "startingCash": 2000,
+    "startSalary": 200,
+    "sets": [
+      {
+        "id": "EG",
+        "country": "Egypt",
+        "properties": [
+          {
+            "id": "EG-1",
+            "name": "Cairo",
+            "setId": "EG",
+            "price": 60,
+            "baseRent": 6,
+            "completeSetRent": 12,
+            "developmentRents": [
+              30,
+              90,
+              220,
+              310
+            ],
+            "buildingCost": 40,
+            "mortgageValue": 30,
+            "unmortgageCost": 33,
+            "buildingSellBack": 20
+          },
+          {
+            "id": "EG-2",
+            "name": "Giza",
+            "setId": "EG",
+            "price": 90,
+            "baseRent": 10,
+            "completeSetRent": 20,
+            "developmentRents": [
+              50,
+              140,
+              320,
+              470
+            ],
+            "buildingCost": 50,
+            "mortgageValue": 45,
+            "unmortgageCost": 50,
+            "buildingSellBack": 25
+          }
+        ]
+      },
+      {
+        "id": "MA",
+        "country": "Morocco",
+        "properties": [
+          {
+            "id": "MA-1",
+            "name": "Casablanca",
+            "setId": "MA",
+            "price": 100,
+            "baseRent": 10,
+            "completeSetRent": 20,
+            "developmentRents": [
+              50,
+              150,
+              360,
+              520
+            ],
+            "buildingCost": 60,
+            "mortgageValue": 50,
+            "unmortgageCost": 55,
+            "buildingSellBack": 30
+          },
+          {
+            "id": "MA-2",
+            "name": "Rabat",
+            "setId": "MA",
+            "price": 130,
+            "baseRent": 14,
+            "completeSetRent": 28,
+            "developmentRents": [
+              70,
+              200,
+              470,
+              680
+            ],
+            "buildingCost": 80,
+            "mortgageValue": 65,
+            "unmortgageCost": 72,
+            "buildingSellBack": 40
+          }
+        ]
+      },
+      {
+        "id": "SA",
+        "country": "South Africa",
+        "properties": [
+          {
+            "id": "SA-1",
+            "name": "Cape Town",
+            "setId": "SA",
+            "price": 140,
+            "baseRent": 14,
+            "completeSetRent": 28,
+            "developmentRents": [
+              70,
+              210,
+              500,
+              730
+            ],
+            "buildingCost": 80,
+            "mortgageValue": 70,
+            "unmortgageCost": 77,
+            "buildingSellBack": 40
+          },
+          {
+            "id": "SA-2",
+            "name": "Durban",
+            "setId": "SA",
+            "price": 170,
+            "baseRent": 18,
+            "completeSetRent": 36,
+            "developmentRents": [
+              90,
+              260,
+              610,
+              880
+            ],
+            "buildingCost": 100,
+            "mortgageValue": 85,
+            "unmortgageCost": 94,
+            "buildingSellBack": 50
+          }
+        ]
+      },
+      {
+        "id": "IN",
+        "country": "India",
+        "properties": [
+          {
+            "id": "IN-1",
+            "name": "Mumbai",
+            "setId": "IN",
+            "price": 180,
+            "baseRent": 18,
+            "completeSetRent": 36,
+            "developmentRents": [
+              90,
+              270,
+              650,
+              940
+            ],
+            "buildingCost": 110,
+            "mortgageValue": 90,
+            "unmortgageCost": 99,
+            "buildingSellBack": 55
+          },
+          {
+            "id": "IN-2",
+            "name": "Jaipur",
+            "setId": "IN",
+            "price": 210,
+            "baseRent": 22,
+            "completeSetRent": 44,
+            "developmentRents": [
+              110,
+              320,
+              760,
+              1090
+            ],
+            "buildingCost": 130,
+            "mortgageValue": 105,
+            "unmortgageCost": 116,
+            "buildingSellBack": 65
+          }
+        ]
+      },
+      {
+        "id": "JP",
+        "country": "Japan",
+        "properties": [
+          {
+            "id": "JP-1",
+            "name": "Tokyo",
+            "setId": "JP",
+            "price": 220,
+            "baseRent": 22,
+            "completeSetRent": 44,
+            "developmentRents": [
+              110,
+              330,
+              790,
+              1140
+            ],
+            "buildingCost": 130,
+            "mortgageValue": 110,
+            "unmortgageCost": 121,
+            "buildingSellBack": 65
+          },
+          {
+            "id": "JP-2",
+            "name": "Kyoto",
+            "setId": "JP",
+            "price": 250,
+            "baseRent": 26,
+            "completeSetRent": 52,
+            "developmentRents": [
+              130,
+              380,
+              900,
+              1300
+            ],
+            "buildingCost": 150,
+            "mortgageValue": 125,
+            "unmortgageCost": 138,
+            "buildingSellBack": 75
+          }
+        ]
+      },
+      {
+        "id": "AU",
+        "country": "Australia",
+        "properties": [
+          {
+            "id": "AU-1",
+            "name": "Sydney",
+            "setId": "AU",
+            "price": 260,
+            "baseRent": 26,
+            "completeSetRent": 52,
+            "developmentRents": [
+              130,
+              390,
+              940,
+              1350
+            ],
+            "buildingCost": 160,
+            "mortgageValue": 130,
+            "unmortgageCost": 143,
+            "buildingSellBack": 80
+          },
+          {
+            "id": "AU-2",
+            "name": "Perth",
+            "setId": "AU",
+            "price": 290,
+            "baseRent": 30,
+            "completeSetRent": 60,
+            "developmentRents": [
+              150,
+              440,
+              1040,
+              1510
+            ],
+            "buildingCost": 170,
+            "mortgageValue": 145,
+            "unmortgageCost": 160,
+            "buildingSellBack": 85
+          }
+        ]
+      },
+      {
+        "id": "IT",
+        "country": "Italy",
+        "properties": [
+          {
+            "id": "IT-1",
+            "name": "Rome",
+            "setId": "IT",
+            "price": 300,
+            "baseRent": 30,
+            "completeSetRent": 60,
+            "developmentRents": [
+              150,
+              450,
+              1080,
+              1560
+            ],
+            "buildingCost": 180,
+            "mortgageValue": 150,
+            "unmortgageCost": 165,
+            "buildingSellBack": 90
+          },
+          {
+            "id": "IT-2",
+            "name": "Milan",
+            "setId": "IT",
+            "price": 310,
+            "baseRent": 32,
+            "completeSetRent": 64,
+            "developmentRents": [
+              160,
+              470,
+              1120,
+              1610
+            ],
+            "buildingCost": 190,
+            "mortgageValue": 155,
+            "unmortgageCost": 171,
+            "buildingSellBack": 95
+          },
+          {
+            "id": "IT-3",
+            "name": "Venice",
+            "setId": "IT",
+            "price": 330,
+            "baseRent": 34,
+            "completeSetRent": 68,
+            "developmentRents": [
+              170,
+              500,
+              1190,
+              1720
+            ],
+            "buildingCost": 200,
+            "mortgageValue": 165,
+            "unmortgageCost": 182,
+            "buildingSellBack": 100
+          }
+        ]
+      },
+      {
+        "id": "FR",
+        "country": "France",
+        "properties": [
+          {
+            "id": "FR-1",
+            "name": "Paris",
+            "setId": "FR",
+            "price": 340,
+            "baseRent": 34,
+            "completeSetRent": 68,
+            "developmentRents": [
+              170,
+              510,
+              1220,
+              1770
+            ],
+            "buildingCost": 200,
+            "mortgageValue": 170,
+            "unmortgageCost": 187,
+            "buildingSellBack": 100
+          },
+          {
+            "id": "FR-2",
+            "name": "Nice",
+            "setId": "FR",
+            "price": 350,
+            "baseRent": 36,
+            "completeSetRent": 72,
+            "developmentRents": [
+              180,
+              530,
+              1260,
+              1820
+            ],
+            "buildingCost": 210,
+            "mortgageValue": 175,
+            "unmortgageCost": 193,
+            "buildingSellBack": 105
+          },
+          {
+            "id": "FR-3",
+            "name": "Lyon",
+            "setId": "FR",
+            "price": 370,
+            "baseRent": 38,
+            "completeSetRent": 76,
+            "developmentRents": [
+              190,
+              560,
+              1330,
+              1920
+            ],
+            "buildingCost": 220,
+            "mortgageValue": 185,
+            "unmortgageCost": 204,
+            "buildingSellBack": 110
+          }
+        ]
+      },
+      {
+        "id": "ES",
+        "country": "Spain",
+        "properties": [
+          {
+            "id": "ES-1",
+            "name": "Madrid",
+            "setId": "ES",
+            "price": 380,
+            "baseRent": 38,
+            "completeSetRent": 76,
+            "developmentRents": [
+              190,
+              570,
+              1370,
+              1980
+            ],
+            "buildingCost": 230,
+            "mortgageValue": 190,
+            "unmortgageCost": 209,
+            "buildingSellBack": 115
+          },
+          {
+            "id": "ES-2",
+            "name": "Barcelona",
+            "setId": "ES",
+            "price": 390,
+            "baseRent": 40,
+            "completeSetRent": 80,
+            "developmentRents": [
+              200,
+              590,
+              1400,
+              2030
+            ],
+            "buildingCost": 230,
+            "mortgageValue": 195,
+            "unmortgageCost": 215,
+            "buildingSellBack": 115
+          },
+          {
+            "id": "ES-3",
+            "name": "Seville",
+            "setId": "ES",
+            "price": 410,
+            "baseRent": 42,
+            "completeSetRent": 84,
+            "developmentRents": [
+              210,
+              620,
+              1480,
+              2130
+            ],
+            "buildingCost": 250,
+            "mortgageValue": 205,
+            "unmortgageCost": 226,
+            "buildingSellBack": 125
+          }
+        ]
+      },
+      {
+        "id": "BR",
+        "country": "Brazil",
+        "properties": [
+          {
+            "id": "BR-1",
+            "name": "Rio de Janeiro",
+            "setId": "BR",
+            "price": 420,
+            "baseRent": 42,
+            "completeSetRent": 84,
+            "developmentRents": [
+              210,
+              630,
+              1510,
+              2180
+            ],
+            "buildingCost": 250,
+            "mortgageValue": 210,
+            "unmortgageCost": 231,
+            "buildingSellBack": 125
+          },
+          {
+            "id": "BR-2",
+            "name": "Sao Paulo",
+            "setId": "BR",
+            "price": 430,
+            "baseRent": 44,
+            "completeSetRent": 88,
+            "developmentRents": [
+              220,
+              650,
+              1550,
+              2240
+            ],
+            "buildingCost": 260,
+            "mortgageValue": 215,
+            "unmortgageCost": 237,
+            "buildingSellBack": 130
+          },
+          {
+            "id": "BR-3",
+            "name": "Brasilia",
+            "setId": "BR",
+            "price": 450,
+            "baseRent": 46,
+            "completeSetRent": 92,
+            "developmentRents": [
+              230,
+              680,
+              1620,
+              2340
+            ],
+            "buildingCost": 270,
+            "mortgageValue": 225,
+            "unmortgageCost": 248,
+            "buildingSellBack": 135
+          }
+        ]
+      },
+      {
+        "id": "MX",
+        "country": "Mexico",
+        "properties": [
+          {
+            "id": "MX-1",
+            "name": "Mexico City",
+            "setId": "MX",
+            "price": 460,
+            "baseRent": 46,
+            "completeSetRent": 92,
+            "developmentRents": [
+              230,
+              690,
+              1660,
+              2390
+            ],
+            "buildingCost": 280,
+            "mortgageValue": 230,
+            "unmortgageCost": 253,
+            "buildingSellBack": 140
+          },
+          {
+            "id": "MX-2",
+            "name": "Cancun",
+            "setId": "MX",
+            "price": 470,
+            "baseRent": 48,
+            "completeSetRent": 96,
+            "developmentRents": [
+              240,
+              710,
+              1690,
+              2440
+            ],
+            "buildingCost": 280,
+            "mortgageValue": 235,
+            "unmortgageCost": 259,
+            "buildingSellBack": 140
+          },
+          {
+            "id": "MX-3",
+            "name": "Guadalajara",
+            "setId": "MX",
+            "price": 490,
+            "baseRent": 50,
+            "completeSetRent": 100,
+            "developmentRents": [
+              250,
+              740,
+              1760,
+              2550
+            ],
+            "buildingCost": 290,
+            "mortgageValue": 245,
+            "unmortgageCost": 270,
+            "buildingSellBack": 145
+          }
+        ]
+      },
+      {
+        "id": "CA",
+        "country": "Canada",
+        "properties": [
+          {
+            "id": "CA-1",
+            "name": "Toronto",
+            "setId": "CA",
+            "price": 500,
+            "baseRent": 50,
+            "completeSetRent": 100,
+            "developmentRents": [
+              250,
+              750,
+              1800,
+              2600
+            ],
+            "buildingCost": 300,
+            "mortgageValue": 250,
+            "unmortgageCost": 275,
+            "buildingSellBack": 150
+          },
+          {
+            "id": "CA-2",
+            "name": "Vancouver",
+            "setId": "CA",
+            "price": 520,
+            "baseRent": 52,
+            "completeSetRent": 104,
+            "developmentRents": [
+              260,
+              780,
+              1870,
+              2700
+            ],
+            "buildingCost": 310,
+            "mortgageValue": 260,
+            "unmortgageCost": 286,
+            "buildingSellBack": 155
+          },
+          {
+            "id": "CA-3",
+            "name": "Montreal",
+            "setId": "CA",
+            "price": 550,
+            "baseRent": 56,
+            "completeSetRent": 112,
+            "developmentRents": [
+              280,
+              830,
+              1980,
+              2860
+            ],
+            "buildingCost": 330,
+            "mortgageValue": 275,
+            "unmortgageCost": 303,
+            "buildingSellBack": 165
+          }
+        ]
+      }
+    ],
+    "tiles": [
+      {
+        "index": 0,
+        "type": "corner",
+        "name": "START"
+      },
+      {
+        "index": 1,
+        "type": "property",
+        "propertyId": "EG-1"
+      },
+      {
+        "index": 2,
+        "type": "property",
+        "propertyId": "EG-2"
+      },
+      {
+        "index": 3,
+        "type": "card",
+        "deck": "surprise"
+      },
+      {
+        "index": 4,
+        "type": "property",
+        "propertyId": "MA-1"
+      },
+      {
+        "index": 5,
+        "type": "property",
+        "propertyId": "MA-2"
+      },
+      {
+        "index": 6,
+        "type": "transit",
+        "name": "Heathrow"
+      },
+      {
+        "index": 7,
+        "type": "utility",
+        "name": "Power Grid"
+      },
+      {
+        "index": 8,
+        "type": "card",
+        "deck": "treasure"
+      },
+      {
+        "index": 9,
+        "type": "property",
+        "propertyId": "SA-1"
+      },
+      {
+        "index": 10,
+        "type": "property",
+        "propertyId": "SA-2"
+      },
+      {
+        "index": 11,
+        "type": "grand-special",
+        "name": "Auction Hub"
+      },
+      {
+        "index": 12,
+        "type": "tax",
+        "name": "Customs",
+        "amount": 100
+      },
+      {
+        "index": 13,
+        "type": "corner",
+        "name": "HOLDING"
+      },
+      {
+        "index": 14,
+        "type": "property",
+        "propertyId": "IN-1"
+      },
+      {
+        "index": 15,
+        "type": "property",
+        "propertyId": "IN-2"
+      },
+      {
+        "index": 16,
+        "type": "card",
+        "deck": "surprise"
+      },
+      {
+        "index": 17,
+        "type": "property",
+        "propertyId": "JP-1"
+      },
+      {
+        "index": 18,
+        "type": "property",
+        "propertyId": "JP-2"
+      },
+      {
+        "index": 19,
+        "type": "transit",
+        "name": "Gare du Nord"
+      },
+      {
+        "index": 20,
+        "type": "utility",
+        "name": "Water Works"
+      },
+      {
+        "index": 21,
+        "type": "card",
+        "deck": "treasure"
+      },
+      {
+        "index": 22,
+        "type": "property",
+        "propertyId": "AU-1"
+      },
+      {
+        "index": 23,
+        "type": "property",
+        "propertyId": "AU-2"
+      },
+      {
+        "index": 24,
+        "type": "grand-special",
+        "name": "Gift/Choice"
+      },
+      {
+        "index": 25,
+        "type": "grand-special",
+        "name": "Transit Pass"
+      },
+      {
+        "index": 26,
+        "type": "corner",
+        "name": "VACATION"
+      },
+      {
+        "index": 27,
+        "type": "property",
+        "propertyId": "IT-1"
+      },
+      {
+        "index": 28,
+        "type": "property",
+        "propertyId": "IT-2"
+      },
+      {
+        "index": 29,
+        "type": "property",
+        "propertyId": "IT-3"
+      },
+      {
+        "index": 30,
+        "type": "card",
+        "deck": "surprise"
+      },
+      {
+        "index": 31,
+        "type": "card",
+        "deck": "surprise"
+      },
+      {
+        "index": 32,
+        "type": "transit",
+        "name": "Changi"
+      },
+      {
+        "index": 33,
+        "type": "property",
+        "propertyId": "FR-1"
+      },
+      {
+        "index": 34,
+        "type": "property",
+        "propertyId": "FR-2"
+      },
+      {
+        "index": 35,
+        "type": "property",
+        "propertyId": "FR-3"
+      },
+      {
+        "index": 36,
+        "type": "property",
+        "propertyId": "ES-1"
+      },
+      {
+        "index": 37,
+        "type": "property",
+        "propertyId": "ES-2"
+      },
+      {
+        "index": 38,
+        "type": "property",
+        "propertyId": "ES-3"
+      },
+      {
+        "index": 39,
+        "type": "corner",
+        "name": "GO TO HOLDING"
+      },
+      {
+        "index": 40,
+        "type": "property",
+        "propertyId": "BR-1"
+      },
+      {
+        "index": 41,
+        "type": "property",
+        "propertyId": "BR-2"
+      },
+      {
+        "index": 42,
+        "type": "property",
+        "propertyId": "BR-3"
+      },
+      {
+        "index": 43,
+        "type": "card",
+        "deck": "treasure"
+      },
+      {
+        "index": 44,
+        "type": "tax",
+        "name": "Customs",
+        "amount": 100
+      },
+      {
+        "index": 45,
+        "type": "transit",
+        "name": "Grand Central"
+      },
+      {
+        "index": 46,
+        "type": "property",
+        "propertyId": "MX-1"
+      },
+      {
+        "index": 47,
+        "type": "property",
+        "propertyId": "MX-2"
+      },
+      {
+        "index": 48,
+        "type": "property",
+        "propertyId": "MX-3"
+      },
+      {
+        "index": 49,
+        "type": "property",
+        "propertyId": "CA-1"
+      },
+      {
+        "index": 50,
+        "type": "property",
+        "propertyId": "CA-2"
+      },
+      {
+        "index": 51,
+        "type": "property",
+        "propertyId": "CA-3"
+      }
+    ],
+    "transit": {
+      "price": 200,
+      "rents": [
+        20,
+        40,
+        60,
+        80
+      ],
+      "mortgageValue": 100,
+      "unmortgageCost": 110
+    },
+    "utility": {
+      "price": 150,
+      "rentMultipliers": [
+        4,
+        10
+      ],
+      "mortgageValue": 75,
+      "unmortgageCost": 83
+    }
+  }
 }
