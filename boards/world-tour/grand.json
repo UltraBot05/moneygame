@@ -7,7 +7,7 @@
     "min": 6,
     "max": 10
   },
-  "status": "PRE_FREEZE_CANDIDATE",
+  "status": "FROZEN_BASELINE",
   "economyProfile": {
     "kind": "grand",
     "ref": "world-tour-grand@1",

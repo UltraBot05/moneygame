@@ -5,8 +5,11 @@ import { STANDARD_ECONOMY, GRAND_ECONOMY } from "./spike-008/economy-data.ts";
 import { runConfiguration, simulateGame, specialLandingRent } from "./spike-008/economy-simulator.ts";
 
 const boards = [STANDARD_CANDIDATE, GRAND_CANDIDATE];
-describe("pre-FREEZE authored economy", () => {
+describe("frozen authored economy baseline", () => {
   it("keeps fixed counts, contiguous sets, unique property references and two utilities", () => {
+    expect(CANDIDATE_RULES.status).toBe("FROZEN_BASELINE");
+    expect(CANDIDATE_RULES.developmentActions).toBe(2);
+    expect(CANDIDATE_RULES.grandMovement).toBe("core");
     for (const board of boards) {
       const grand = board.kind === "grand";
       const properties = board.sets.flatMap((set) => set.properties);

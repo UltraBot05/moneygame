@@ -188,7 +188,7 @@ Evidence and builder handoff: `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATI
 
 ## FREEZE-001 — Architecture review
 
-**Status:** TODO
+**Status:** DONE
 **Depends:** SPIKE-001..008, ECON-001
 
 ECON-001 must be independently approved before this review begins. Card-content finalization and human balance approval are explicit review considerations; simulation alone does not freeze the product.
@@ -200,6 +200,9 @@ PASS -> freeze
 MODIFY -> amend ADR + rerun
 FAIL -> redesign
 ```
+
+**Builder handoff (2026-09-13): implementation baseline prepared.** `docs/architecture/ARCHITECTURE-FREEZE-v1.md` records frozen decisions, provisional launch candidates, deferred work, and non-blocking risks. Human balance validation and final card/Holding content remain explicit future tasks rather than being frozen by implication. Lint, typecheck, 164 tests, build, historical economy replay, and the 250-seed reconciliation replay pass; independent FREEZE-001 review is pending.
+
 
 ---
 

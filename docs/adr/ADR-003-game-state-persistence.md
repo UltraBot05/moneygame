@@ -1,6 +1,6 @@
 # ADR-003 — Authoritative game-state persistence
 
-**Status:** Proposed / freeze after SPIKE-002/005  
+**Status:** Accepted by FREEZE-001
 **Date:** 2026-08-31
 
 ## Context
