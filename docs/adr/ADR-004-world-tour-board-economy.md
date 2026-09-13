@@ -1,6 +1,6 @@
 # ADR-004 — World Tour boards and economy
 
-**Status:** Proposed / freeze after renderer/economy gates  
+**Status:** Accepted by FREEZE-001
 **Date:** 2026-08-31
 
 ## Context
@@ -30,7 +30,7 @@ world-tour-grand@1
 3 sets/side
 ```
 
-Initial hypothesis: six pairs + six triples. Grand corner semantics remain open.
+Frozen mapping: six pairs + six triples. Grand has four fixed structural corner positions; their final product semantics remain deferred.
 
 ## No slider
 Tile count is part of boardId/version. Different size = different new-game board.
@@ -38,7 +38,7 @@ Tile count is part of boardId/version. Different size = different new-game board
 ## Economy
 Independent authored Standard/Grand price/rent tables.
 
-Initial calibration:
+Frozen shared calibration:
 ```text
 Start salary 200
 default cash 2000
@@ -55,24 +55,24 @@ Grand: 6,7,8,9,10
 ```
 
 ## Grand pacing
-Compare core vs Turbo candidate vs Transit candidate using simulation and humans. "None" is valid.
+Grand launches with core movement. Turbo and Transit remain disabled isolated concepts; later human evidence may revisit them only through the freeze amendment rule.
 
 Other Mega-inspired modules stay post-launch.
 
 ## Revisit
 Board structure/economy fails simulation or alpha; 6-player crossover changes; pacing test falsifies assumptions.
 
-## ECON-001 reconciliation amendment (proposed, 2026-09-08)
+## ECON-001 reconciliation amendment (accepted by FREEZE-001, 2026-09-13)
 
-The user authorized this pre-FREEZE reconciliation. It does not accept or freeze this ADR. Canonical candidate tables now live in `boards/world-tour/{standard,grand}.json`, with shared candidate rules in `packages/game-core/src/economy.ts`.
+The user authorized the ECON-001 reconciliation before freeze. FREEZE-001 accepts its board structure, shared rules, and Grand A decision as the implementation baseline. Canonical board tables live in `boards/world-tour/{standard,grand}.json`, with shared rules in `packages/game-core/src/economy.ts`.
 
 - Standard retains 40/22/8, with Egypt/France low-high pairs and six middle triples.
 - Grand retains 52/30/12, three sets per side, six low-tier pairs plus six high-tier triples.
 - Grand uses two utilities (Power Grid, Water Works); index 31 becomes a fourth Surprise space. Counts sum to 52. This explicitly supersedes the earlier three-utility candidate.
 - Preserve authored prices/rent/build ladders and canonical money ratios; round redemption upward using integer percentages.
-- Propose two development purchases per owner turn, one level/action, with payment and even-build validation on each action. No price/rent uplift.
-- Propose Grand A; isolated B/C rules are defined for comparison, not enabled.
+- Two development purchases per owner turn, one level/action, with payment and even-build validation on each action. No price/rent uplift.
+- Grand uses A; isolated B/C rules are defined for comparison and are not enabled.
 - Cash custom bound is integer 1500–2500 inclusive. Default remains 2000.
 - Start landing totals 300; passing pays 200; Holding release 50. Core reserved Grand specials and Vacation have zero cash effect. Card content remains provisional and is not promoted from visual placeholders.
 
-See `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md` for exact values, matrix, trade-offs and limitations. Independent review and human approval remain required; FREEZE-001 stays TODO.
+See `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md` for exact values, matrix, trade-offs and limitations. ECON-001 independent review is complete. Human balance validation and card finalization remain deferred and may amend this decision through the post-freeze change rule.

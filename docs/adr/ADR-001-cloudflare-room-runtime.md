@@ -1,6 +1,6 @@
 # ADR-001 — Cloudflare room runtime
 
-**Status:** Proposed / freeze after SPIKE-001  
+**Status:** Accepted by FREEZE-001
 **Date:** 2026-08-31
 
 ## Context
@@ -10,9 +10,11 @@ Need authoritative realtime coordination for 3–10 players at ₹0 normal frien
 Use:
 ```text
 Cloudflare Worker
-→ one SQLite-backed Durable Object per room/game
+→ one SQLite-backed GameRoom Durable Object per room
 → Hibernation WebSocket API
 ```
+
+Rematches create fresh `gameId` and `GameState` values inside the same room-scoped GameRoom Durable Object.
 
 The DO owns live room authority. Finalized profile/game data goes to D1.
 

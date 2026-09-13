@@ -59,7 +59,7 @@ export interface EconomyBoard {
 
 
 export const CANDIDATE_RULES = Object.freeze({
-  status: "PRE_FREEZE_CANDIDATE",
+  status: "FROZEN_BASELINE",
   referenceSalary: 200,
   defaultStartingCash: 2000,
   startingCashPresets: Object.freeze([1500, 2000, 2500]),

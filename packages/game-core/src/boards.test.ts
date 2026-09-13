@@ -8,6 +8,11 @@ const standardBoard: BoardDefinition = standard;
 const grandBoard: BoardDefinition = grand;
 
 describe("canonical launch board definitions", () => {
+  it("identify both definitions as the frozen implementation baseline", () => {
+    expect(standard.status).toBe("FROZEN_BASELINE");
+    expect(grand.status).toBe("FROZEN_BASELINE");
+  });
+
   it("have distinct stable refs and ids", () => {
     expect(standardBoard.ref).toBe("world-tour-standard@1");
     expect(grandBoard.ref).toBe("world-tour-grand@1");

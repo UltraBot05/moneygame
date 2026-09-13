@@ -1,9 +1,9 @@
-# Architecture Freeze Candidate v0.4.1
+# Architecture Baseline v1.0
 ## Free Real-Time Property-Trading Board Game
 
-**Date:** 2026-08-31  
-**Status:** Freeze candidate; freeze only after the architecture spikes in `TASKS.md` pass.  
-**Source baseline:** project spec v0.4 plus the hardening decisions recorded here.  
+**Date:** 2026-09-13
+**Status:** Frozen implementation baseline; see `docs/architecture/ARCHITECTURE-FREEZE-v1.md`.
+**Source baseline:** project spec v0.4, completed spikes, ECON-001, and the FREEZE-001 decisions recorded here.
 **Budget:** ₹0 under normal personal/friend-group use.  
 **Supported match start:** 3–10 players.  
 **Launch boards:** World Tour Standard v1 (40) and World Tour Grand v1 (52).
@@ -12,16 +12,22 @@
 
 # 1. Freeze rule
 
-Architecture is not accepted because an AI or human finds it convincing. Every load-bearing claim needs an experiment, observable result, falsifier, and recorded PASS / MODIFY / FAIL decision.
+This baseline follows the completed SPIKE-001 through SPIKE-008 evidence and the independently approved ECON-001 reconciliation. Freeze means implementation must follow the recorded baseline; it does not claim that deferred content is complete or that future evidence can never change a decision.
 
-After freeze, architecture changes only when:
+Any change to a frozen invariant requires:
+- an explicit task and rationale;
+- tests or other evidence proportionate to the risk;
+- an ADR or freeze amendment when a load-bearing decision changes;
+- independent review before the change is accepted.
+
+Valid reasons to amend the baseline include:
 - a spike fails;
 - a real bug falsifies an invariant;
 - a provider/API limitation changes;
 - measured performance/resource usage breaks a threshold;
 - human playtesting falsifies a game-design assumption.
 
-"An agent had a better idea" is not a reason to redesign frozen architecture.
+Unresolved card content, full Holding behavior, human balance validation, and optional modules remain deferred rather than frozen by implication.
 
 ---
 
@@ -101,13 +107,13 @@ world-tour-grand@1
 4 structural corners
 ```
 
-Pre-FREEZE reconciled 30-property candidate:
+Frozen 30-property mapping:
 - six 2-property sets;
 - six 3-property sets.
 
-ECON-001 retains the authored low/high cities in the first six tiers and all cities in the last six. Two utilities follow the later Design decision; the old third utility at index 31 becomes Surprise, keeping 52 spaces. See `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md`. Simulation is evidence, not human approval.
+The mapping retains the authored low/high cities in the first six tiers and all cities in the last six. Two utilities follow the later Design decision; the old third-utility slot at index 31 is Surprise, keeping 52 spaces. Auction Hub, Gift/Choice, and Transit Pass are reserved neutral spaces in core mode; their names do not enable mechanics. See `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md`.
 
-Grand's four corner semantics are **not frozen**. They may stay familiar or become more original later.
+Grand has four immutable structural corner positions. Their final product semantics remain deferred; the current familiar roles must not be mistaken for finalized Grand-specific content.
 
 ## State isolation
 
@@ -201,13 +207,10 @@ Accepted mutation order:
 
 ```text
 authenticate
-→ connection epoch
-→ payload schema
-→ actionId/idempotency
-→ phase/version
-→ game-core transition
+→ validate connection epoch / payload schema / game identity / actionId / idempotency / phase / version
+→ compute next canonical state and next gameVersion
+→ persist canonical state + incremented gameVersion + idempotency metadata in one transaction
 → durable commit
-→ gameVersion++
 → broadcast committed result
 ```
 
@@ -430,9 +433,9 @@ Budget exhaustion is a board/rules defect and must log enough context/seed to re
 
 # 15. Economy
 
-Standard and Grand have independent authored price/rent tables in `boards/world-tour/standard.json` and `boards/world-tour/grand.json` (`economyProfile`). These are pre-FREEZE candidates, loaded immutably by `packages/game-core/src/economy-candidates.ts`. Full tables, provenance, remaining assumptions and comparison evidence are in `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md`.
+Standard and Grand have independent authored price/rent tables in `boards/world-tour/standard.json` and `boards/world-tour/grand.json` (`economyProfile`). They are the frozen implementation inputs and approved launch candidates, loaded immutably by `packages/game-core/src/economy-candidates.ts`. Human balance validation may amend them through the freeze change rule. Full tables, provenance, assumptions and comparison evidence are in `docs/architecture/PRE-FREEZE-ECONOMY-RECONCILIATION.md`.
 
-Initial reference:
+Frozen shared values:
 
 ```text
 Start salary = 200
@@ -443,9 +446,9 @@ unmortgage = principal + 10%
 building sell-back = 50%
 ```
 
-Host starting cash: 1500 / 2000 / 2500 / custom integer 1500–2500 inclusive (candidate bound).
+Host starting cash: 1500 / 2000 / 2500 / custom safe integer 1500–2500 inclusive. Final launch balance remains subject to the documented human-validation amendment path.
 
-ECON-001 candidate: at most two paid, even-build level purchases per owner turn, across all sets, while not in debt or Holding. A landmark is level 4 and costs one action. No carryover; each payment and even-build condition is checked separately. Design prices and rent ladders are unchanged. Start pays 200 on passing, 300 total on exact landing (200 salary + 100 bonus). Holding release costs 50; Vacation and reserved Grand specials transfer no cash. Redemption uses integer `ceil(principal * 110 / 100)`, never floating-point `principal * 1.1`.
+At most two paid, even-build level purchases are allowed per eligible owner turn, across all sets, while not in debt or Holding. Each purchase is independently validated for payment and even-build legality. A landmark is level 4 and consumes one action. Actions never carry over. Design prices and rent ladders are unchanged. Start pays 200 on passing, 300 total on exact landing (200 salary + 100 bonus). Holding release costs 50; Vacation and reserved Grand specials transfer no cash. Redemption uses integer `ceil(principal * 110 / 100)`, never floating-point `principal * 1.1`.
 
 Balance matrix:
 
@@ -462,7 +465,7 @@ Use distributions, not only averages.
 
 Grand does not automatically need a special pacing mechanic.
 
-ECON-001 proposes A (core) with the shared two-action development rule. B/C remain isolated pre-FREEZE simulation candidates, with exact definitions and evidence in the reconciliation document. Neither is enabled in the production candidate. Claude and human review are still required.
+The baseline selects A (core) with the shared two-action development rule. B/C remain isolated optional concepts, with exact simulation definitions and evidence in the reconciliation document. Neither is enabled in board data or production rules.
 
 Compare:
 
@@ -582,31 +585,31 @@ Measure deployed provider counters; local estimates do not freeze architecture.
 
 ---
 
-# 20. Freeze gates
+# 20. Freeze evidence and deferred validation
 
 ## A — DO runtime
-Prove 10 clients, hibernation eligibility, idle billing stop, wake/reconstruction, alarms, and resource thresholds.
+SPIKE-001 passed 10-client convergence, hibernation eligibility, wake/reconstruction, alarms, and the recorded resource thresholds.
 
 ## B — crash atomicity
-Inject failures before/during/after commit and around broadcast. No uncommitted authoritative success; retry never doubles.
+SPIKE-002 passed fault injection before/during/after commit and around broadcast. No uncommitted authoritative success; retry never doubles.
 
 ## C — auth/reconnect
-Test opaque one-time OAuth state, replay rejection, 89s reconnect, >90s expiry, 20s one-time current-turn extension, epoch takeover.
+SPIKE-003/004 passed opaque one-time OAuth state, replay rejection, 89s reconnect, >90s expiry, 20s one-time current-turn extension, and epoch takeover.
 
 ## D — rematch/board isolation
-Repeated Standard -> Standard -> Grand -> Standard. Zero mutable leakage.
+SPIKE-005 passed repeated Standard -> Standard, Standard -> Grand, and Grand -> Standard rematches with new game IDs and zero mutable leakage.
 
 ## E — renderer destruction test
-10 same-tile tokens, long names, large balances, 12 sets, reconnect badges, 10 bidders, mobile, 200% zoom, reduced motion.
+SPIKE-006 passed the dual-board renderer destruction checks. Production UI work remains owned by UI tasks.
 
 ## F — engine fuzzing
-Large seeded legal-command runs. No invariant failure/deadlock/unbounded chain.
+SPIKE-007 passed deterministic seeded legal-command fuzzing and defect detection.
 
 ## G — economy
-Standard 3–6 and Grand 6–10 simulation + human alpha.
+SPIKE-008 and ECON-001 establish the approved implementation candidate. All nine default-$2000 configurations pass; human validation of two-action snowball dynamics and Grand balance remains explicitly deferred and can trigger an amendment.
 
 ## H — Grand pacing
-A/B/C simulation + human evaluation. "None" allowed.
+ECON-001 compared A/B/C and selected A (core). Turbo and Transit remain disabled optional concepts. Grand human playtesting remains deferred.
 
 ---
 
@@ -633,6 +636,8 @@ A/B/C simulation + human evaluation. "None" allowed.
 
 # 22. Change control
 
-Load-bearing decisions live under `docs/adr/`.
+Load-bearing decisions live under `docs/adr/` and are summarized by `docs/architecture/ARCHITECTURE-FREEZE-v1.md`.
+
+Changing a frozen invariant requires an explicit task, rationale, proportionate tests/evidence, an ADR or freeze amendment when appropriate, and independent review. This is deliberate change control, not a ban on future change.
 
 If code conflicts with architecture, builder must stop, mark task BLOCKED, provide evidence, and propose the smallest change. Do not silently code around the architecture.

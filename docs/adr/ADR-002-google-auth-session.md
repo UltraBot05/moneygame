@@ -1,6 +1,6 @@
 # ADR-002 — Google authentication and application session
 
-**Status:** Proposed / freeze after SPIKE-003/004  
+**Status:** Accepted by FREEZE-001
 **Date:** 2026-08-31
 
 ## Context
