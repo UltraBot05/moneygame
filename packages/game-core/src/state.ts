@@ -31,6 +31,8 @@ export interface PropertyState {
 export interface TurnIdentity {
   readonly turnId: string;
   readonly activePlayerId: string;
+  readonly turnNumber: number;
+  readonly hasRolled: boolean;
 }
 
 export interface GameState {
@@ -189,10 +191,15 @@ function parseProperty(value: unknown, index: number, board: BoardDefinition): P
 function parseTurn(value: unknown, playerIds: ReadonlySet<string>): TurnIdentity | null {
   if (value === null) return null;
   const object = objectAt(value, "$.turn");
-  exactKeys(object, ["turnId", "activePlayerId"], "$.turn");
+  exactKeys(object, ["turnId", "activePlayerId", "turnNumber", "hasRolled"], "$.turn");
+  if (object.hasRolled !== true && object.hasRolled !== false) {
+    fail("$.turn.hasRolled", "expected a boolean");
+  }
   const turn = {
     turnId: identifierAt(object.turnId, "$.turn.turnId"),
     activePlayerId: identifierAt(object.activePlayerId, "$.turn.activePlayerId"),
+    turnNumber: integerAt(object.turnNumber, "$.turn.turnNumber", 1),
+    hasRolled: object.hasRolled,
   };
   if (!playerIds.has(turn.activePlayerId)) {
     fail("$.turn.activePlayerId", "must identify a player in this game");

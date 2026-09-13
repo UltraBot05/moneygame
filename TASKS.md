@@ -215,10 +215,10 @@ FAIL -> redesign
 | CORE-003 | DONE   | injected RNG/shuffle         | CORE-002     | same seed same outcome              |
 | CORE-004 | DONE   | command/actionId/gameVersion | CORE-002     | duplicate action test               |
 | CORE-005 | DONE   | lobby 3–10 start rule       | CORE-002     | 1/2 reject, 3+ valid                |
-| CORE-006 | TODO   | turn order/start/end         | CORE-003,004 | one active owner                    |
-| CORE-007 | TODO   | dice/doubles                 | CORE-006     | server/deterministic                |
-| CORE-008 | TODO   | movement + pass Start        | CORE-007     | correct 40/52 wrap                  |
-| CORE-009 | TODO   | tile dispatcher              | CORE-008     | typed resolution                    |
+| CORE-006 | DONE   | turn order/start/end         | CORE-003,004 | one active owner                    |
+| CORE-007 | DONE   | dice/doubles                 | CORE-006     | server/deterministic                |
+| CORE-008 | DONE   | movement + pass Start        | CORE-007     | correct 40/52 wrap                  |
+| CORE-009 | DONE   | tile dispatcher              | CORE-008     | typed resolution                    |
 
 ---
 
