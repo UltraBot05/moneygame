@@ -5,7 +5,11 @@
 
 export * from "./board";
 export * from "./command";
+export * from "./dice";
 export * from "./economy";
+export * from "./gameplay";
 export * from "./lobby";
+export * from "./movement";
 export * from "./random";
 export * from "./state";
+export * from "./tile-dispatch";
