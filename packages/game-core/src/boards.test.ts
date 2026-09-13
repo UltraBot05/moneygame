@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import grand from "../../../boards/world-tour/grand.json";
 import standard from "../../../boards/world-tour/standard.json";
-import type { BoardDefinition } from "./index";
+import { parseBoardDefinition } from "./board";
 
 // Verify the canonical authored files directly (no duplicated constants).
-const standardBoard: BoardDefinition = standard;
-const grandBoard: BoardDefinition = grand;
+const standardBoard = parseBoardDefinition(standard);
+const grandBoard = parseBoardDefinition(grand);
 
 describe("canonical launch board definitions", () => {
   it("identify both definitions as the frozen implementation baseline", () => {

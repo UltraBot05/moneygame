@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import grand from "../../../boards/world-tour/grand.json";
 import standard from "../../../boards/world-tour/standard.json";
-import type { BoardDefinition } from "./index";
+import { parseBoardDefinition, type BoardDefinition } from "./board";
 import { createGame, type GameState } from "./game";
 
 /**
@@ -11,8 +11,8 @@ import { createGame, type GameState } from "./game";
  * structure, catching shallow-copy contamination.
  */
 
-const standardBoard: BoardDefinition = standard;
-const grandBoard: BoardDefinition = grand;
+const standardBoard = parseBoardDefinition(standard);
+const grandBoard = parseBoardDefinition(grand);
 const PLAYERS = ["google:alice", "google:bob", "google:carol"];
 
 /** Aggressively dirties every mutable field of a game, in place. */
