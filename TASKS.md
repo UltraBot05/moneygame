@@ -210,11 +210,11 @@ FAIL -> redesign
 
 | ID       | Status | Task                         | Depends      | Acceptance                          |
 | -------- | ------ | ---------------------------- | ------------ | ----------------------------------- |
-| CORE-001 | TODO   | Board schema + validator     | FREEZE-001   | invalid refs/groups/decks reject    |
-| CORE-002 | TODO   | Game/player/property schemas | CORE-001     | strict initial state; integer money |
-| CORE-003 | TODO   | injected RNG/shuffle         | CORE-002     | same seed same outcome              |
-| CORE-004 | TODO   | command/actionId/gameVersion | CORE-002     | duplicate action test               |
-| CORE-005 | TODO   | lobby 3–10 start rule       | CORE-002     | 1/2 reject, 3+ valid                |
+| CORE-001 | DONE   | Board schema + validator     | FREEZE-001   | invalid refs/groups/decks reject    |
+| CORE-002 | DONE   | Game/player/property schemas | CORE-001     | strict initial state; integer money |
+| CORE-003 | DONE   | injected RNG/shuffle         | CORE-002     | same seed same outcome              |
+| CORE-004 | DONE   | command/actionId/gameVersion | CORE-002     | duplicate action test               |
+| CORE-005 | DONE   | lobby 3–10 start rule       | CORE-002     | 1/2 reject, 3+ valid                |
 | CORE-006 | TODO   | turn order/start/end         | CORE-003,004 | one active owner                    |
 | CORE-007 | TODO   | dice/doubles                 | CORE-006     | server/deterministic                |
 | CORE-008 | TODO   | movement + pass Start        | CORE-007     | correct 40/52 wrap                  |

@@ -14,7 +14,8 @@
  * clearly-labelled spike fixture, not the authored economy table (ADR-004).
  */
 
-import type { BoardDefinition } from "./index";
+import type { BoardDefinition } from "./board";
+import { createSeededRandom, shuffle, type RandomSource } from "./random";
 
 /** Spike fixture only — NOT the authored ADR-004 economy. Isolation proofs do
  *  not depend on the value; it merely gives players a mutable balance field. */
@@ -79,33 +80,8 @@ export interface GameState {
   turn: TurnState | null;
 }
 
-/**
- * Deterministic PRNG (mulberry32). Injected seed → reproducible deck order, so
- * game logic never reaches for `Math.random` (PROJECT_RULES §10).
- */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** Fisher–Yates over a fresh copy using the injected RNG (no in-place aliasing). */
-function shuffle<T>(items: readonly T[], rng: () => number): T[] {
-  const out = items.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [out[i], out[j]] = [out[j] as T, out[i] as T];
-  }
-  return out;
-}
-
 /** Builds a synthetic opaque deck (`<prefix>0`…) — no authored card content. */
-function syntheticDeck(prefix: string, size: number, rng: () => number): string[] {
+function syntheticDeck(prefix: string, size: number, rng: RandomSource): string[] {
   const ids: string[] = [];
   for (let i = 0; i < size; i++) ids.push(`${prefix}${i}`);
   return shuffle(ids, rng);
@@ -130,7 +106,7 @@ export interface CreateGameInput {
 export function createGame(input: CreateGameInput): GameState {
   const { gameId, board, playerIds, seed } = input;
   const cash = input.startingCash ?? SPIKE_FIXTURE_STARTING_CASH;
-  const rng = mulberry32(seed);
+  const rng = createSeededRandom(seed);
 
   const players: PlayerState[] = playerIds.map((userId) => ({
     userId,
