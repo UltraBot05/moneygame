@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-13
 **Task:** FREEZE-001
-**Status:** Frozen implementation baseline; independent task review pending
+**Status:** Frozen implementation baseline (independently reviewed, approved, and merged — FREEZE-001 DONE)
 
 This document is the concise implementation baseline. It summarizes, but does not replace, `ARCHITECTURE.md`, accepted ADR-001 through ADR-004, canonical board data, or the ECON-001 reconciliation evidence. Historical spike reports remain evidence of the state tested at the time and are not rewritten by this freeze.
 
