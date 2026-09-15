@@ -10,13 +10,19 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
+    "typecheck:tests": "tsc --noEmit -p app/worker/tsconfig.test.json",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.config.integration.ts",
+    "test:e2e": "playwright test",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
     "simulate:economy": "node --experimental-strip-types packages/game-core/src/spike-008/economy-cli.ts",
     "build": "pnpm -r --if-present build",
     "simulate:reconciliation": "node --experimental-strip-types packages/game-core/src/spike-008/reconciliation-cli.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.0.0",
     "eslint": "^10.9.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "typescript": "^5.7.3",

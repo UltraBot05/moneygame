@@ -47,7 +47,7 @@ function earliestId(db: DatabaseSync): string | undefined {
 }
 
 function dueIds(db: DatabaseSync, now: number): string[] {
-  return (db.prepare(DUE).all(now) as IdRow[]).map((r) => r.id);
+  return (db.prepare(DUE).all(now) as unknown as IdRow[]).map((r) => r.id);
 }
 
 describe("deadline SQL selection", () => {
@@ -89,7 +89,7 @@ describe("deadline SQL selection", () => {
     for (let i = 0; i < 300; i++) insert(db, `r${i}`, i, 1);
     insert(db, "p", 999_999, 0);
     const detail = (
-      db.prepare(`EXPLAIN QUERY PLAN ${EARLIEST}`).all() as PlanRow[]
+      db.prepare(`EXPLAIN QUERY PLAN ${EARLIEST}`).all() as unknown as PlanRow[]
     )
       .map((r) => r.detail)
       .join(" | ");
