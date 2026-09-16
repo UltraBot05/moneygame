@@ -45,11 +45,13 @@ function rollCurrentTurn(
 ) {
   const activePlayerId = state.turn?.activePlayerId;
   expect(activePlayerId).toBeDefined();
+  const values = [0, 0.2];
+  let calls = 0;
   const rolled = accepted(
     applyGameplayCommand(
       state,
       command("ROLL_DICE", actionId, state.gameVersion),
-      context(activePlayerId!, () => 0),
+      context(activePlayerId!, () => values[calls++] as number),
     ),
   ).state;
   return parseGameState({ ...rolled, pendingResolution: null }, board);
@@ -66,6 +68,8 @@ describe("CORE-006 turn lifecycle", () => {
       activePlayerId: "google:carol",
       turnNumber: 1,
       hasRolled: false,
+      rollAgain: false,
+      consecutiveDoubles: 0,
     });
     expect(replay.turn).toEqual(first.turn);
   });
@@ -251,6 +255,7 @@ describe("CORE-007..009 composed authoritative roll", () => {
     });
     expect(result.state.players[0]).toMatchObject({ position: 1, cash: 2200 });
     expect(result.state.turn?.hasRolled).toBe(true);
+    expect(result.state.turn).toMatchObject({ rollAgain: true, consecutiveDoubles: 1 });
   });
 
   it("never accepts client-supplied dice or a second roll in the same turn", () => {
@@ -267,7 +272,11 @@ describe("CORE-007..009 composed authoritative roll", () => {
       applyGameplayCommand(
         active,
         command("ROLL_DICE", "first", active.gameVersion),
-        context("google:carol", () => 0),
+        context("google:carol", (() => {
+          const values = [0, 0.2];
+          let index = 0;
+          return () => values[index++] as number;
+        })()),
       ),
     ).state;
     expect(
@@ -316,6 +325,120 @@ describe("CORE-007..009 composed authoritative roll", () => {
     ).toMatchObject({
       kind: "DUPLICATE_ACTION",
       committedGameVersion: active.gameVersion,
+    });
+  });
+});
+
+describe("CORE-012 doubles continuation integration", () => {
+  function withoutPending(state: ReturnType<typeof startedGame>) {
+    return parseGameState({ ...state, pendingResolution: null }, board);
+  }
+
+  it("permits consecutive doubles, persists their count, and blocks through resolution", () => {
+    let state = startedGame();
+    const first = accepted(applyGameplayCommand(
+      state,
+      command("ROLL_DICE", "double-1", state.gameVersion),
+      context("google:carol", () => 0),
+    ));
+    expect(first.state.turn).toMatchObject({
+      hasRolled: true,
+      rollAgain: true,
+      consecutiveDoubles: 1,
+    });
+    expect(first.state.pendingResolution?.continuation).toEqual({ type: "ROLL_AGAIN" });
+
+    let rngCalls = 0;
+    expect(applyGameplayCommand(
+      first.state,
+      command("ROLL_DICE", "blocked-double", first.state.gameVersion),
+      context("google:carol", () => { rngCalls += 1; return 0; }),
+    )).toMatchObject({ kind: "REJECTED", reason: "PENDING_RESOLUTION" });
+    expect(rngCalls).toBe(0);
+
+    state = withoutPending(first.state);
+    const second = accepted(applyGameplayCommand(
+      state,
+      command("ROLL_DICE", "double-2", state.gameVersion),
+      context("google:carol", () => 0),
+    ));
+    expect(second.event).toMatchObject({
+      type: "DICE_ROLLED",
+      roll: { consecutiveDoubles: 2, isThirdConsecutiveDouble: false },
+    });
+
+    state = withoutPending(second.state);
+    const third = accepted(applyGameplayCommand(
+      state,
+      command("ROLL_DICE", "double-3", state.gameVersion),
+      context("google:carol", () => 0),
+    ));
+    expect(third.event).toMatchObject({
+      type: "DICE_ROLLED",
+      roll: { consecutiveDoubles: 3, isThirdConsecutiveDouble: true },
+    });
+    expect(third.state.turn).toMatchObject({ rollAgain: true, consecutiveDoubles: 3 });
+  });
+
+  it("replays the same continuation sequence from the same state and seed", () => {
+    const initial = startedGame();
+    const replay = () => {
+      let state = initial;
+      const rng = createSeededRandom(11);
+      const rolls = [];
+      for (let index = 0; index < 4; index += 1) {
+        const result = accepted(applyGameplayCommand(
+          state,
+          command("ROLL_DICE", "seeded-" + index, state.gameVersion),
+          context("google:carol", rng),
+        ));
+        if (result.event.type !== "DICE_ROLLED") throw new Error("expected dice event");
+        rolls.push(result.event.roll);
+        state = withoutPending(result.state);
+        if (!state.turn?.rollAgain) break;
+      }
+      return rolls;
+    };
+    const first = replay();
+    expect(first.slice(0, 2)).toMatchObject([
+      { doubles: true, consecutiveDoubles: 1 },
+      { doubles: true, consecutiveDoubles: 2 },
+    ]);
+    expect(replay()).toEqual(first);
+  });
+
+  it("ends only after a non-double and resets continuation for the next owner", () => {
+    const active = startedGame();
+    const doubled = accepted(applyGameplayCommand(
+      active,
+      command("ROLL_DICE", "double", active.gameVersion),
+      context("google:carol", () => 0),
+    )).state;
+    const continuation = withoutPending(doubled);
+    expect(applyGameplayCommand(
+      continuation,
+      command("END_TURN", "premature-end", continuation.gameVersion),
+      context("google:carol"),
+    )).toMatchObject({ kind: "REJECTED", reason: "ROLL_REQUIRED" });
+
+    const values = [0, 0.2];
+    let calls = 0;
+    const completed = accepted(applyGameplayCommand(
+      continuation,
+      command("ROLL_DICE", "non-double", continuation.gameVersion),
+      context("google:carol", () => values[calls++] as number),
+    )).state;
+    expect(completed.turn).toMatchObject({ rollAgain: false, consecutiveDoubles: 0 });
+    const advanced = accepted(applyGameplayCommand(
+      withoutPending(completed),
+      command("END_TURN", "advance", completed.gameVersion),
+      context("google:carol"),
+    )).state;
+    expect(advanced.turn).toMatchObject({
+      activePlayerId: "google:alice",
+      hasRolled: false,
+      rollAgain: false,
+      consecutiveDoubles: 0,
     });
   });
 });

@@ -40,7 +40,7 @@ function started(board: BoardDefinition) {
   return result.state;
 }
 
-function landed(board: BoardDefinition, tileIndex: number, rollTotal = 2) {
+function landed(board: BoardDefinition, tileIndex: number, rollTotal = 3) {
   const state = started(board);
   const positioned = parseGameState({
     ...state,
@@ -191,7 +191,7 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
       decisionOwnerUserId: players[0],
       source: { type: "TILE", tileIndex: 1 },
       continuation: { type: "END_TURN" },
-      roll: { dice: [1, 1], total: 2 },
+      roll: { dice: [1, 2], total: 3 },
       obligation: null,
     });
     const restored = parseGameState(JSON.parse(JSON.stringify(state)), board);

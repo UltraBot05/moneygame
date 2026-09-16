@@ -48,6 +48,7 @@ export type ResolutionSource =
 
 export type ResolutionContinuation =
   | { readonly type: "END_TURN" }
+  | { readonly type: "ROLL_AGAIN" }
   | { readonly type: "RESUME_EFFECT"; readonly effectId: string };
 
 export type ObligationCreditor =
@@ -77,6 +78,8 @@ export interface TurnIdentity {
   readonly activePlayerId: string;
   readonly turnNumber: number;
   readonly hasRolled: boolean;
+  readonly rollAgain: boolean;
+  readonly consecutiveDoubles: number;
 }
 
 export interface GameState {
@@ -251,15 +254,34 @@ function parseAsset(value: unknown, index: number, board: BoardDefinition): Asse
 function parseTurn(value: unknown, playerIds: ReadonlySet<string>): TurnIdentity | null {
   if (value === null) return null;
   const object = objectAt(value, "$.turn");
-  exactKeys(object, ["turnId", "activePlayerId", "turnNumber", "hasRolled"], "$.turn");
+  exactKeys(
+    object,
+    ["turnId", "activePlayerId", "turnNumber", "hasRolled", "rollAgain", "consecutiveDoubles"],
+    "$.turn",
+  );
   if (object.hasRolled !== true && object.hasRolled !== false) {
     fail("$.turn.hasRolled", "expected a boolean");
+  }
+  if (object.rollAgain !== true && object.rollAgain !== false) {
+    fail("$.turn.rollAgain", "expected a boolean");
+  }
+  const consecutiveDoubles = integerAt(
+    object.consecutiveDoubles,
+    "$.turn.consecutiveDoubles",
+  );
+  if (!object.hasRolled && (object.rollAgain || consecutiveDoubles !== 0)) {
+    fail("$.turn", "a turn cannot continue before its first roll");
+  }
+  if (object.rollAgain !== (consecutiveDoubles > 0)) {
+    fail("$.turn", "rollAgain must match the consecutive doubles count");
   }
   const turn = {
     turnId: identifierAt(object.turnId, "$.turn.turnId"),
     activePlayerId: identifierAt(object.activePlayerId, "$.turn.activePlayerId"),
     turnNumber: integerAt(object.turnNumber, "$.turn.turnNumber", 1),
     hasRolled: object.hasRolled,
+    rollAgain: object.rollAgain,
+    consecutiveDoubles,
   };
   if (!playerIds.has(turn.activePlayerId)) {
     fail("$.turn.activePlayerId", "must identify a player in this game");
@@ -272,6 +294,10 @@ function parseContinuation(value: unknown, path: string): ResolutionContinuation
   if (object.type === "END_TURN") {
     exactKeys(object, ["type"], path);
     return { type: "END_TURN" };
+  }
+  if (object.type === "ROLL_AGAIN") {
+    exactKeys(object, ["type"], path);
+    return { type: "ROLL_AGAIN" };
   }
   if (object.type === "RESUME_EFFECT") {
     exactKeys(object, ["type", "effectId"], path);
@@ -462,6 +488,18 @@ function parsePending(
   ) {
     fail(path + ".obligation", "purchase and auction decisions do not yet owe money");
   }
+  if (continuation.type === "ROLL_AGAIN" && !turn.rollAgain) {
+    fail(path + ".continuation", "ROLL_AGAIN requires canonical doubles continuation");
+  }
+  if (roll !== null) {
+    if (roll.consecutiveDoubles !== turn.consecutiveDoubles) {
+      fail(path + ".roll.consecutiveDoubles", "must match the current turn");
+    }
+    const expectedContinuation = turn.rollAgain ? "ROLL_AGAIN" : "END_TURN";
+    if (continuation.type !== expectedContinuation) {
+      fail(path + ".continuation", "must match the authoritative roll continuation");
+    }
+  }
   return {
     resolutionId: identifierAt(object.resolutionId, path + ".resolutionId"),
     kind,
@@ -529,7 +567,7 @@ export function parseGameState(input: unknown, boardInput: BoardDefinition): Gam
   }
   const seenAssetIds = new Set<string>();
   const seenTiles = new Set<number>();
-  for (const asset of assets) {
+  for (const [index, asset] of assets.entries()) {
     if (seenAssetIds.has(asset.assetId) || seenTiles.has(asset.tileIndex)) {
       fail("$.assets", "duplicate asset identity or tile");
     }
@@ -537,6 +575,9 @@ export function parseGameState(input: unknown, boardInput: BoardDefinition): Gam
     seenTiles.add(asset.tileIndex);
     if (asset.ownerUserId !== null && !playerIds.has(asset.ownerUserId)) {
       fail("$.assets", "owner must identify a player in this game");
+    }
+    if (asset.tileIndex !== expectedAssets[index]?.index) {
+      fail("$.assets[" + index + "]", "assets must follow canonical board order");
     }
   }
   for (const expected of expectedAssets) {
@@ -553,7 +594,25 @@ export function parseGameState(input: unknown, boardInput: BoardDefinition): Gam
   if ((phase === "ACTIVE_TURN") !== (turn !== null)) {
     fail("$.turn", "turn identity is required only during ACTIVE_TURN");
   }
+  if (turn !== null) {
+    const activePlayer = players.find((player) => player.userId === turn.activePlayerId);
+    if (activePlayer?.status !== "ACTIVE") {
+      fail("$.turn.activePlayerId", "active turn owner must be an eligible player");
+    }
+  }
   const pendingResolution = parsePending(root.pendingResolution, board, playerIds, turn);
+
+  if (pendingResolution !== null) {
+    const decisionOwner = players.find(
+      (player) => player.userId === pendingResolution.decisionOwnerUserId,
+    );
+    if (decisionOwner?.status !== "ACTIVE") {
+      fail(
+        "$.pendingResolution.decisionOwnerUserId",
+        "pending decision owner must be an eligible player",
+      );
+    }
+  }
 
   if (pendingResolution?.source.type === "TILE") {
     const tileIndex = pendingResolution.source.tileIndex;
