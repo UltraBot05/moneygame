@@ -125,6 +125,8 @@ function nextTurn(turnNumber: number, activePlayerId: string): TurnIdentity {
     activePlayerId,
     turnNumber,
     hasRolled: false,
+    rollAgain: false,
+    consecutiveDoubles: 0,
   };
 }
 
@@ -179,7 +181,7 @@ function pendingForLanding(
     actorUserId: playerId,
     decisionOwnerUserId: playerId,
     source: { type: "TILE", tileIndex: resolution.tileIndex },
-    continuation: { type: "END_TURN" },
+    continuation: roll.doubles ? { type: "ROLL_AGAIN" } : { type: "END_TURN" },
     roll,
     obligation: null,
   };
@@ -233,14 +235,14 @@ function rollCurrentPlayer(
   if (turn === null) return rejected(state, "GAME_NOT_STARTED");
   if (turn.activePlayerId !== actorUserId) return rejected(state, "NOT_YOUR_TURN");
   if (state.pendingResolution !== null) return rejected(state, "PENDING_RESOLUTION");
-  if (turn.hasRolled) return rejected(state, "ROLL_ALREADY_COMPLETED");
+  if (turn.hasRolled && !turn.rollAgain) return rejected(state, "ROLL_ALREADY_COMPLETED");
 
   const playerIndex = state.players.findIndex((player) => player.userId === actorUserId);
   const player = state.players[playerIndex];
   if (player === undefined) return rejected(state, "ACTOR_NOT_IN_GAME");
   if (player.status !== "ACTIVE") return rejected(state, "PLAYER_NOT_ELIGIBLE");
 
-  const roll = rollDice(rng);
+  const roll = rollDice(rng, turn.consecutiveDoubles);
   const movement = calculateMovement(board, player.position, roll.total);
   const resolution = dispatchLandedTile(board, movement.to);
   const nextCash = player.cash + movement.startAward;
@@ -255,7 +257,12 @@ function rollCurrentPlayer(
   );
   const nextState = acceptedState(state, board, nextGameVersion, {
     players,
-    turn: { ...turn, hasRolled: true },
+    turn: {
+      ...turn,
+      hasRolled: true,
+      rollAgain: roll.doubles,
+      consecutiveDoubles: roll.consecutiveDoubles,
+    },
     pendingResolution: pendingForLanding(
       state, turn, actorUserId, roll, resolution, nextGameVersion,
     ),
@@ -287,6 +294,7 @@ function endCurrentTurn(
   if (turn.activePlayerId !== actorUserId) return rejected(state, "NOT_YOUR_TURN");
   if (state.pendingResolution !== null) return rejected(state, "PENDING_RESOLUTION");
   if (!turn.hasRolled) return rejected(state, "ROLL_REQUIRED");
+  if (turn.rollAgain) return rejected(state, "ROLL_REQUIRED");
 
   const eligiblePlayers = state.players.filter((player) => player.status === "ACTIVE");
   if (eligiblePlayers.length <= 1) {

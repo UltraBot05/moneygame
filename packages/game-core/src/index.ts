@@ -4,6 +4,7 @@
  */
 
 export * from "./board";
+export * from "./cards";
 export * from "./command";
 export * from "./dice";
 export * from "./economy";

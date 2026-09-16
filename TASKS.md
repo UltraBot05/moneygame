@@ -237,9 +237,9 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 | CORE-009 | DONE   | tile dispatcher                          | CORE-008         | exhaustive typed resolution                                                  |
 | CORE-010 | DONE   | all-ownable canonical asset state        | CORE-001,002     | countries/transit/utilities represented once with ownership + mortgage state |
 | CORE-011 | DONE   | pending resolution + obligation contract | CORE-004,009,010 | pending actor/kind/continuation/charge persisted; unrelated actions blocked  |
-| CORE-012 | TODO   | doubles/turn continuation integration    | CORE-006,007,011 | legitimate extra rolls deterministic; no duplicate-roll bypass               |
-| CORE-013 | TODO   | declarative card/effect schema           | CORE-001         | typed deck/card/effect refs validate; executable card code rejected          |
-| CORE-014 | TODO   | canonical cross-state invariants         | CORE-002,010,011 | active owner eligible; asset/pending refs valid; inconsistent state rejects  |
+| CORE-012 | DONE   | doubles/turn continuation integration    | CORE-006,007,011 | legitimate extra rolls deterministic; no duplicate-roll bypass               |
+| CORE-013 | DONE   | declarative card/effect schema           | CORE-001         | typed deck/card/effect refs validate; executable card code rejected          |
+| CORE-014 | DONE   | canonical cross-state invariants         | CORE-002,010,011 | active owner eligible; asset/pending refs valid; inconsistent state rejects  |
 
 ---
 
