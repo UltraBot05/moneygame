@@ -45,13 +45,14 @@ function rollCurrentTurn(
 ) {
   const activePlayerId = state.turn?.activePlayerId;
   expect(activePlayerId).toBeDefined();
-  return accepted(
+  const rolled = accepted(
     applyGameplayCommand(
       state,
       command("ROLL_DICE", actionId, state.gameVersion),
       context(activePlayerId!, () => 0),
     ),
   ).state;
+  return parseGameState({ ...rolled, pendingResolution: null }, board);
 }
 
 describe("CORE-006 turn lifecycle", () => {
@@ -271,7 +272,7 @@ describe("CORE-007..009 composed authoritative roll", () => {
     ).state;
     expect(
       applyGameplayCommand(
-        rolled,
+        parseGameState({ ...rolled, pendingResolution: null }, board),
         command("ROLL_DICE", "second", rolled.gameVersion),
         context("google:carol", () => 0),
       ),

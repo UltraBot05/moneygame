@@ -26,10 +26,10 @@ describe("CORE-002 canonical initial GameState", () => {
     });
     expect(state.players.map((player) => player.seatIndex)).toEqual([0, 1, 2]);
     expect(state.players.every((player) => player.cash === 2000)).toBe(true);
-    expect(state.properties).toHaveLength(22);
-    expect(state.properties.every((property) =>
+    expect(state.assets).toHaveLength(28);
+    expect(state.assets.every((property) =>
       property.ownerUserId === null
-      && property.developmentLevel === 0
+      && (property.kind !== "PROPERTY" || property.developmentLevel === 0)
       && property.mortgaged === false
     )).toBe(true);
     expect(Object.isFrozen(state)).toBe(true);
@@ -40,7 +40,7 @@ describe("CORE-002 canonical initial GameState", () => {
     expect(other.board).not.toBe(state.board);
     expect(other.players).not.toBe(state.players);
     expect(other.players[0]).not.toBe(state.players[0]);
-    expect(other.properties).not.toBe(state.properties);
+    expect(other.assets).not.toBe(state.assets);
   });
 
   it("rejects invalid monetary values and duplicate player identities", () => {
@@ -87,11 +87,9 @@ describe("CORE-002 canonical initial GameState", () => {
 
     const impossibleProperty = {
       ...state,
-      properties: state.properties.map((property, index) => ({
-        ...property,
-        ownerUserId: index === 0 ? null : property.ownerUserId,
-        developmentLevel: index === 0 ? 1 : property.developmentLevel,
-      })),
+      assets: state.assets.map((property, index) => property.kind === "PROPERTY"
+        ? { ...property, developmentLevel: index === 0 ? 1 : property.developmentLevel }
+        : property),
     };
     expect(() => parseGameState(impossibleProperty, board)).toThrow(/unowned property/);
   });
