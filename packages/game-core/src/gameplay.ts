@@ -14,6 +14,7 @@ import {
   parseGameState,
   type GameState,
   type PlayerState,
+  type PendingResolution,
   type TurnIdentity,
 } from "./state";
 import { dispatchLandedTile, type TileResolution } from "./tile-dispatch";
@@ -62,7 +63,8 @@ export type GameplayRejectionReason =
   | "NOT_YOUR_TURN"
   | "PLAYER_NOT_ELIGIBLE"
   | "ROLL_REQUIRED"
-  | "ROLL_ALREADY_COMPLETED";
+  | "ROLL_ALREADY_COMPLETED"
+  | "PENDING_RESOLUTION";
 
 export type GameplayCommandResult =
   | {
@@ -134,6 +136,7 @@ function acceptedState(
     phase?: GameState["phase"];
     turn?: TurnIdentity | null;
     players?: readonly PlayerState[];
+    pendingResolution?: PendingResolution | null;
   }>,
 ): GameState {
   return parseGameState(
@@ -146,6 +149,41 @@ function acceptedState(
   );
 }
 
+function pendingForLanding(
+  state: GameState,
+  turn: TurnIdentity,
+  playerId: string,
+  roll: DiceRoll,
+  resolution: TileResolution,
+  nextGameVersion: number,
+): PendingResolution | null {
+  let kind: PendingResolution["kind"] | null = null;
+  if (
+    resolution.kind === "PROPERTY"
+    || resolution.kind === "TRANSIT"
+    || resolution.kind === "UTILITY"
+  ) {
+    const asset = state.assets.find((candidate) => candidate.tileIndex === resolution.tileIndex);
+    if (asset === undefined) throw new RangeError("landed ownable has no canonical asset");
+    if (asset.ownerUserId === null) kind = "BUY_DECISION";
+    else if (asset.ownerUserId !== playerId && !asset.mortgaged) kind = "RENT";
+  } else if (resolution.kind === "TAX") {
+    kind = "TAX";
+  } else if (resolution.kind === "SURPRISE" || resolution.kind === "TREASURE") {
+    kind = "CARD";
+  }
+  if (kind === null) return null;
+  return {
+    resolutionId: turn.turnId + ":landing:" + nextGameVersion,
+    kind,
+    actorUserId: playerId,
+    decisionOwnerUserId: playerId,
+    source: { type: "TILE", tileIndex: resolution.tileIndex },
+    continuation: { type: "END_TURN" },
+    roll,
+    obligation: null,
+  };
+}
 function startGame(
   state: GameState,
   board: BoardDefinition,
@@ -194,6 +232,7 @@ function rollCurrentPlayer(
   const turn = state.turn;
   if (turn === null) return rejected(state, "GAME_NOT_STARTED");
   if (turn.activePlayerId !== actorUserId) return rejected(state, "NOT_YOUR_TURN");
+  if (state.pendingResolution !== null) return rejected(state, "PENDING_RESOLUTION");
   if (turn.hasRolled) return rejected(state, "ROLL_ALREADY_COMPLETED");
 
   const playerIndex = state.players.findIndex((player) => player.userId === actorUserId);
@@ -217,6 +256,9 @@ function rollCurrentPlayer(
   const nextState = acceptedState(state, board, nextGameVersion, {
     players,
     turn: { ...turn, hasRolled: true },
+    pendingResolution: pendingForLanding(
+      state, turn, actorUserId, roll, resolution, nextGameVersion,
+    ),
   });
 
   return Object.freeze({
@@ -243,6 +285,7 @@ function endCurrentTurn(
   const turn = state.turn;
   if (turn === null) return rejected(state, "GAME_NOT_STARTED");
   if (turn.activePlayerId !== actorUserId) return rejected(state, "NOT_YOUR_TURN");
+  if (state.pendingResolution !== null) return rejected(state, "PENDING_RESOLUTION");
   if (!turn.hasRolled) return rejected(state, "ROLL_REQUIRED");
 
   const eligiblePlayers = state.players.filter((player) => player.status === "ACTIVE");
