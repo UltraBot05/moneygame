@@ -305,7 +305,6 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
   });
 
   it.each([
-    [14, "TAX"],
     [9, "CARD"],
     [5, "BUY_DECISION"],
     [29, "BUY_DECISION"],
@@ -402,11 +401,24 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
   });
   it("represents auction handoff, detention fee, and card-origin debt without rule execution", () => {
     const purchase = landed(standard, 1);
-    const auction = withPending(standard, {
-      ...purchase.pendingResolution!,
-      kind: "AUCTION",
-      decisionOwnerUserId: players[1]!,
-    }, purchase);
+    const declined = applyGameplayCommand(
+      purchase,
+      {
+        type: "DECLINE_PROPERTY",
+        gameId: purchase.gameId,
+        actionId: "decline-for-auction-contract",
+        expectedGameVersion: purchase.gameVersion,
+        payload: { resolutionId: purchase.pendingResolution!.resolutionId },
+      },
+      {
+        board: standard,
+        actorUserId: players[0]!,
+        rng: () => 0,
+        auctionDecisionDeadlineAt: 2000,
+      },
+    );
+    if (declined.kind !== "ACCEPTED") throw new Error("decline must start auction");
+    const auction = declined.state;
     expect(parseGameState(JSON.parse(JSON.stringify(auction)), standard)).toEqual(auction);
     expect(() => assertPendingDecisionOwner(auction, auction.pendingResolution!.resolutionId, players[0]!))
       .toThrow(/wrong actor/);

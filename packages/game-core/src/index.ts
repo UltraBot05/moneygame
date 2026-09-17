@@ -12,5 +12,6 @@ export * from "./gameplay";
 export * from "./lobby";
 export * from "./movement";
 export * from "./random";
+export * from "./rules";
 export * from "./state";
 export * from "./tile-dispatch";

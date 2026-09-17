@@ -247,14 +247,14 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 
 | ID       | Status | Task                              | Depends                    | Acceptance                                                                         |
 | -------- | ------ | --------------------------------- | -------------------------- | ---------------------------------------------------------------------------------- |
-| RULE-001 | TODO   | buy/decline property              | CORE-010,011               | atomic cash/ownership; persisted decision; decline routes to auction               |
-| RULE-002 | TODO   | base rent/set multiplier          | RULE-001,CORE-011          | authored tables; qualifying complete unimproved set = 2×; automatic charge        |
-| RULE-003 | TODO   | transit                           | RULE-001,CORE-010,011      | canonical $20/$40/$60/$80 scaling; mortgaged hubs excluded                         |
-| RULE-004 | TODO   | utility                           | CORE-007,RULE-001,CORE-011 | authoritative dice rent; canonical ownership/mortgage behavior                     |
-| RULE-005 | TODO   | auction                           | RULE-001,CORE-011          | deterministic bid state; duplicate-safe; timeout/disconnect/no-bid semantics       |
-| RULE-006 | TODO   | buildings/even-build              | RULE-002,CORE-011          | even-build; max 2 paid development actions/turn; no carryover                      |
-| RULE-007 | TODO   | mortgage/unmortgage               | RULE-006,CORE-010          | 50% principal; canonical +10% redemption; zero rent while mortgaged                |
-| RULE-008 | TODO   | tax                               | CORE-009,011               | fixed/percent/choice framework; canonical fixed tax preserved                      |
+| RULE-001 | DONE   | buy/decline property              | CORE-010,011               | atomic cash/ownership; persisted decision; decline routes to auction               |
+| RULE-002 | DONE   | base rent/set multiplier          | RULE-001,CORE-011          | authored tables; qualifying complete unimproved set = 2×; automatic charge        |
+| RULE-003 | DONE   | transit                           | RULE-001,CORE-010,011      | canonical $20/$40/$60/$80 scaling; mortgaged hubs excluded                         |
+| RULE-004 | DONE   | utility                           | CORE-007,RULE-001,CORE-011 | authoritative dice rent; canonical ownership/mortgage behavior                     |
+| RULE-005 | DONE   | auction                           | RULE-001,CORE-011          | deterministic bid state; duplicate-safe; timeout/disconnect/no-bid semantics       |
+| RULE-006 | DONE   | buildings/even-build              | RULE-002,CORE-011          | even-build; max 2 paid development actions/turn; no carryover                      |
+| RULE-007 | DONE   | mortgage/unmortgage               | RULE-006,CORE-010          | 50% principal; canonical +10% redemption; zero rent while mortgaged                |
+| RULE-008 | DONE   | tax                               | CORE-009,011               | fixed/percent/choice framework; canonical fixed tax preserved                      |
 | RULE-009 | TODO   | deck/held-card engine             | CORE-003,009,013           | deterministic draw/shuffle/reshuffle; held-card invariant                          |
 | RULE-010 | TODO   | effect primitives/16-step breaker | RULE-009,CORE-011          | nested effects deterministic; shared 16-step budget; cycle-safe diagnostic failure |
 | RULE-011 | TODO   | Surprise v1                       | RULE-010                   | effects defined by board/card data only; no duplicated hardcoded deck              |
@@ -266,7 +266,7 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 | RULE-017 | TODO   | bankruptcy to bank                | RULE-015,005               | deterministic reset/auction queue; no duplicate auctions                           |
 | RULE-018 | TODO   | teams baseline                    | RULE-002,014,016,017,020   | explicit allied ownership/rent/trade/debt/elimination semantics                    |
 | RULE-019 | TODO   | win conditions                    | RULE-016,017,018,020       | last-standing + time/round; deterministic tie-break; immutable final summary       |
-| RULE-020 | TODO   | match mode/settings contract      | CORE-002,FREEZE-001        | immutable FFA/teams + win mode; only approved settings; no Design-only toggles     |
+| RULE-020 | DONE   | match mode/settings contract      | CORE-002,FREEZE-001        | immutable FFA/teams + win mode; only approved settings; no Design-only toggles     |
 
 ## Game integrity / anti-collusion
 

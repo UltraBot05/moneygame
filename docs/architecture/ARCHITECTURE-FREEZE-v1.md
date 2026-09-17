@@ -94,6 +94,18 @@ Development is limited to at most two paid purchases per eligible owner turn acr
 5. development is forbidden while the owner is in Holding;
 6. development is forbidden while debt rules block the owner.
 
+### Auction rule policy
+
+- The first valid bid is at least $2. Every later bid is at least the current high bid plus $2. There is no reserve.
+- Every non-bankrupt player is initially eligible, including the player who declined the purchase. Team-specific restrictions remain deferred to RULE-018.
+- Auction turns rotate deterministically in seat order, beginning with the next eligible seat after the declining player and wrapping around. A pass is permanent for that auction.
+- Bids are cash-only, may not exceed current canonical cash, and never create debt.
+- With at least one valid bid, the auction settles when only the high bidder remains unpassed. Payment and canonical ownership transfer are atomic.
+- Without a valid bid, the final unpassed player still receives an explicit turn to bid at least $2 or pass. A final pass closes the auction with the asset still unowned.
+- Each current auction actor has a persisted absolute decision deadline. Disconnect does not itself withdraw a player; expiry deterministically auto-passes the current actor. Reconnect restores an unpassed participant but never reverses a pass or auto-pass.
+- The pure game core validates and applies deadline expiry. The runtime owns alarm scheduling and supplies authoritative time and the next absolute deadline; it must not use gameplay timers.
+- Persisted auction state and emitted facts remain neutral audit evidence only. Collusion classification and team semantics are outside RULE-005.
+
 ## 4. Authoritative runtime baseline
 
 - The pure TypeScript game core computes transitions; it imports no UI, Cloudflare, auth, storage, or WebSocket APIs.

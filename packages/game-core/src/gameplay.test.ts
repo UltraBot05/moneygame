@@ -70,6 +70,7 @@ describe("CORE-006 turn lifecycle", () => {
       hasRolled: false,
       rollAgain: false,
       consecutiveDoubles: 0,
+      developmentActionsUsed: 0,
     });
     expect(replay.turn).toEqual(first.turn);
   });
