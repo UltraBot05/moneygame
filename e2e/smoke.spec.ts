@@ -1,13 +1,51 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
- * GOV-004 — Minimal browser smoke test against the real web app shell.
- * Proves the E2E harness runs and the Vite app renders. Does not claim
- * production gameplay E2E coverage; QA-012 extends this foundation.
+ * Browser smoke for the production UI (Section F). The landing page runs without a Worker
+ * (signed-out state). Board screens use the dev-only hot-seat preview, which renders the real
+ * game screen over game-core in the browser; full client-server E2E stays with QA-012.
  */
-test("web app shell loads and renders the board", async ({ page }) => {
+
+async function noDocumentScroll(page: Page): Promise<void> {
+  const size = await page.evaluate(() => ({
+    width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight,
+    viewWidth: innerWidth, viewHeight: innerHeight,
+  }));
+  expect(size.width).toBeLessThanOrEqual(size.viewWidth);
+  expect(size.height).toBeLessThanOrEqual(size.viewHeight);
+}
+
+test("landing offers room creation and joining", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle("moneygame");
+  await expect(page).toHaveTitle("Money·Game");
   await expect(page.locator("h1")).toContainText("Money");
-  await expect(page.locator(".board-frame")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create a private room" })).toBeVisible();
+  await page.getByLabel("Room code").fill("abc123");
+  await page.getByRole("button", { name: "Join with a code" }).click();
+  await expect(page).toHaveURL(/\/r\/ABC123$/);
+  await expect(page.getByRole("link", { name: "Sign in with Google" }).first()).toBeVisible();
+});
+
+for (const [width, height] of [[1920, 1080], [1440, 900]] as const) {
+  test(`standard board fits ${width}x${height} and a turn plays`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/dev/preview?scene=start");
+    await expect(page.getByRole("group", { name: "World Tour Standard board" })).toBeVisible();
+    await expect(page.locator(".board-grid > .tile")).toHaveCount(40);
+    await noDocumentScroll(page);
+    await page.getByRole("button", { name: "Roll dice" }).first().click();
+    await expect(page.locator(".turn-dice")).toContainText("rolled");
+    await page.getByRole("tab", { name: /Game log/ }).click();
+    await expect(page.locator(".log-line").first()).toContainText("rolled");
+  });
+}
+
+test("grand board seats ten players without page scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/dev/preview?board=grand&players=10");
+  await expect(page.locator(".board-grid > .tile")).toHaveCount(52);
+  await expect(page.locator(".player-row")).toHaveCount(10);
+  await noDocumentScroll(page);
+  await page.getByRole("button", { name: /^Cairo/ }).click();
+  await expect(page.getByRole("dialog", { name: "Cairo deed" })).toContainText("Landmark");
 });
