@@ -38,6 +38,7 @@ import {
   type RoomSettings,
   type RoomView,
   type WireCommand,
+  COSMETICS,
 } from "@moneygame/shared";
 import {
   ACTIVE_TURN_RECONNECT_EXTENSION_MS,
@@ -87,7 +88,8 @@ export function ensureRoomSchema(db: SqlDb): void {
     display_name TEXT NOT NULL,
     seat_index INTEGER NOT NULL,
     ready INTEGER NOT NULL,
-    rejoins INTEGER NOT NULL DEFAULT 0
+    rejoins INTEGER NOT NULL DEFAULT 0,
+    ring TEXT
   );`);
   db.run(`CREATE TABLE IF NOT EXISTS games (
     game_id TEXT PRIMARY KEY,
@@ -149,6 +151,7 @@ interface MemberRow extends Record<string, string | number | null> {
   display_name: string;
   seat_index: number;
   ready: number;
+  ring: string | null;
 }
 
 interface SeatRow extends Record<string, string | number | null> {
@@ -179,11 +182,11 @@ function settingsOf(row: RoomRow): RoomSettings {
 }
 
 function members(db: SqlDb): MemberRow[] {
-  return db.all<MemberRow>(`SELECT user_id, display_name, seat_index, ready FROM members ORDER BY seat_index;`);
+  return db.all<MemberRow>(`SELECT user_id, display_name, seat_index, ready, ring FROM members ORDER BY seat_index;`);
 }
 
 function member(db: SqlDb, userId: string): MemberRow | undefined {
-  return db.get<MemberRow>(`SELECT user_id, display_name, seat_index, ready FROM members WHERE user_id = ?;`, userId);
+  return db.get<MemberRow>(`SELECT user_id, display_name, seat_index, ready, ring FROM members WHERE user_id = ?;`, userId);
 }
 
 function seats(db: SqlDb): Map<string, SeatRow> {
@@ -263,10 +266,12 @@ export type Admission =
  */
 export function admit(
   db: SqlDb,
-  user: Readonly<{ userId: string; displayName: string }>,
+  user: Readonly<{ userId: string; displayName: string; ring?: string | null }>,
   now: number,
   spectatorsConnected = 0,
 ): Admission {
+  // Stored as "" when none (the SqlDb seam binds strings and numbers only).
+  const ring = COSMETICS.some((item) => item.kind === "RING" && item.value === user.ring) ? user.ring ?? null : null;
   const current = room(db);
   if (current === undefined) return { role: "REFUSED", reason: "ROOM_NOT_FOUND" };
   if (member(db, user.userId) === undefined) {
@@ -274,10 +279,10 @@ export function admit(
       return spectatorsConnected >= MAX_SPECTATORS ? { role: "REFUSED", reason: "ROOM_FULL" } : { role: "SPECTATOR" };
     }
     const seatIndex = members(db).reduce((max, row) => Math.max(max, row.seat_index + 1), 0);
-    db.run(`INSERT INTO members (user_id, display_name, seat_index, ready) VALUES (?, ?, ?, 0);`,
-      user.userId, user.displayName, seatIndex);
+    db.run(`INSERT INTO members (user_id, display_name, seat_index, ready, ring) VALUES (?, ?, ?, 0, ?);`,
+      user.userId, user.displayName, seatIndex, ring ?? "");
   } else {
-    db.run(`UPDATE members SET display_name = ? WHERE user_id = ?;`, user.displayName, user.userId);
+    db.run(`UPDATE members SET display_name = ?, ring = ? WHERE user_id = ?;`, user.displayName, ring ?? "", user.userId);
   }
   const connection = connectSeat(db, user.userId, now);
   let admission: Admission;
@@ -765,6 +770,7 @@ export function roomView(db: SqlDb, now: number): RoomView | null {
         ready: row.ready === 1,
         connected: seat?.connected === 1,
         away: isAway(seat, now),
+        ring: row.ring === "" ? null : row.ring,
       };
     }),
     turnDeadlineAt: current.paused_at === null ? turn?.deadline_at ?? null : null,

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react
 import { getMe, loginUrl, type Me } from "./api";
 import { GameScreen } from "./Game";
 import { Landing, Lobby, MessagePage } from "./Landing";
+import { ProfilePage } from "./Profile";
 import { browserDeps, RoomClient } from "./room-client";
 import "./styles.css";
 
@@ -64,6 +65,14 @@ export function App() {
     };
   }, []);
   if (DevPreview !== null && path === "/dev/preview") return <Suspense fallback={null}><DevPreview /></Suspense>;
+  if (path === "/me") {
+    if (me === undefined) return <MessagePage me={me} title="Your profile" body="Checking your sign-in…" actions={null} />;
+    if (me === null) {
+      return <MessagePage me={me} title="Your profile" body="Sign in with Google to see your level, coins and match history."
+        actions={<a className="btn btn-primary" href={loginUrl(null)} style={{ textDecoration: "none" }}>Sign in with Google</a>} />;
+    }
+    return <ProfilePage me={me} />;
+  }
   const room = path.match(/^\/r\/([A-Za-z0-9]{4,32})\/?$/);
   if (room === null) return <Landing me={me} navigate={navigate} />;
   const code = (room[1] as string).toUpperCase();

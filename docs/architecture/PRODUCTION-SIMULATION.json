@@ -1,0 +1,2032 @@
+{
+  "schema": "production-simulation/1",
+  "gamesPerConfiguration": 250,
+  "seedBase": 1592590344,
+  "summaries": [
+    {
+      "board": "standard",
+      "players": 3,
+      "games": 250,
+      "seedStart": 3674689639,
+      "durationTurns": {
+        "median": 126.5,
+        "p10": 92,
+        "p90": 174
+      },
+      "durationRounds": {
+        "median": 46.16666666666667,
+        "p10": 32,
+        "p90": 69
+      },
+      "stalledRate": 0.024,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 2,
+        "p10": 2,
+        "p90": 2
+      },
+      "lapsPerPlayer": {
+        "median": 8,
+        "p10": 5.666666666666667,
+        "p90": 11.333333333333334
+      },
+      "startIncomePerPlayer": {
+        "median": 1783.3333333333335,
+        "p10": 1233.3333333333333,
+        "p90": 2533.3333333333335
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.8636363636363636,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 1,
+      "firstSetTurn": {
+        "median": 25,
+        "p10": 16,
+        "p90": 37
+      },
+      "firstBuildTurn": {
+        "median": 25,
+        "p10": 16,
+        "p90": 39
+      },
+      "firstBankruptcyTurn": {
+        "median": 100,
+        "p10": 69,
+        "p90": 143
+      },
+      "acquisitionQuarterTurn": {
+        "median": 9.5,
+        "p10": 7,
+        "p90": 13
+      },
+      "acquisitionHalfTurn": {
+        "median": 21,
+        "p10": 15,
+        "p90": 28
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 44,
+        "p10": 31,
+        "p90": 58
+      },
+      "auctionToListRatio": 0.1143065693430657,
+      "auctionSaleRate": 0.9987228607918263,
+      "rentToStartIncome": {
+        "median": 1.3895986622073577,
+        "p10": 1.1712727272727272,
+        "p90": 1.6809756097560975
+      },
+      "topRentShare": {
+        "median": 0.7845717690807071,
+        "p10": 0.6236727910626905,
+        "p90": 0.8996443089430894
+      },
+      "mortgageEvents": {
+        "median": 17.5,
+        "p10": 13,
+        "p90": 26
+      },
+      "unmortgageEvents": {
+        "median": 8,
+        "p10": 2,
+        "p90": 12
+      },
+      "liquidityEvents": {
+        "median": 7.5,
+        "p10": 5,
+        "p90": 12
+      },
+      "taxPaidPerPlayer": {
+        "median": 233.33333333333334,
+        "p10": 100,
+        "p90": 366.6666666666667
+      },
+      "cardBankNetPerPlayer": {
+        "median": 470,
+        "p10": 221.66666666666666,
+        "p90": 755
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1380,
+          "p10": 970,
+          "p90": 1792
+        },
+        "10": {
+          "median": 1003.5,
+          "p10": 346,
+          "p90": 1688
+        },
+        "20": {
+          "median": 396.5,
+          "p10": 126,
+          "p90": 1437
+        },
+        "40": {
+          "median": 303.5,
+          "p10": 0,
+          "p90": 1703
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.030017032148179856,
+          "p10": 0.011817168338907447,
+          "p90": 0.052873563218390984
+        },
+        "10": {
+          "median": 0.038219593176824995,
+          "p10": 0.013739719400096773,
+          "p90": 0.06850152905198792
+        },
+        "20": {
+          "median": 0.08928319030792542,
+          "p10": 0.03590351917754053,
+          "p90": 0.27861409796893666
+        },
+        "40": {
+          "median": 0.4158848005827739,
+          "p10": 0.1892345679012346,
+          "p90": 0.5838563081584074
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": -0.09237631711537236,
+        "netWorth": 0.2064475694598284,
+        "properties": 0.19284429968570985,
+        "rentCollected": 0.20292792120862296
+      },
+      "round10LeaderWinRate": 0.436,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 46.16666666666667,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 46.16666666666667,
+          "comparator": "<=",
+          "threshold": 70
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.024,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 1.3895986622073577,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 1.3895986622073577,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.436,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    },
+    {
+      "board": "standard",
+      "players": 4,
+      "games": 250,
+      "seedStart": 3674534430,
+      "durationTurns": {
+        "median": 162.5,
+        "p10": 116,
+        "p90": 227
+      },
+      "durationRounds": {
+        "median": 48.125,
+        "p10": 32.75,
+        "p90": 72.5
+      },
+      "stalledRate": 0.048,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 3,
+        "p10": 3,
+        "p90": 3
+      },
+      "lapsPerPlayer": {
+        "median": 7.875,
+        "p10": 5.25,
+        "p90": 11
+      },
+      "startIncomePerPlayer": {
+        "median": 1725,
+        "p10": 1125,
+        "p90": 2375
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.9545454545454546,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 0.996,
+      "firstSetTurn": {
+        "median": 29,
+        "p10": 17,
+        "p90": 45
+      },
+      "firstBuildTurn": {
+        "median": 31,
+        "p10": 19,
+        "p90": 46
+      },
+      "firstBankruptcyTurn": {
+        "median": 111,
+        "p10": 79,
+        "p90": 154
+      },
+      "acquisitionQuarterTurn": {
+        "median": 10,
+        "p10": 7,
+        "p90": 14
+      },
+      "acquisitionHalfTurn": {
+        "median": 21,
+        "p10": 16,
+        "p90": 29
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 43,
+        "p10": 31,
+        "p90": 57
+      },
+      "auctionToListRatio": 0.057384087006296505,
+      "auctionSaleRate": 1,
+      "rentToStartIncome": {
+        "median": 1.8069048295454544,
+        "p10": 1.441875,
+        "p90": 2.2555
+      },
+      "topRentShare": {
+        "median": 0.7614944542994124,
+        "p10": 0.5836846167547349,
+        "p90": 0.884009009009009
+      },
+      "mortgageEvents": {
+        "median": 19,
+        "p10": 14,
+        "p90": 27
+      },
+      "unmortgageEvents": {
+        "median": 12,
+        "p10": 7,
+        "p90": 17
+      },
+      "liquidityEvents": {
+        "median": 8,
+        "p10": 5,
+        "p90": 13
+      },
+      "taxPaidPerPlayer": {
+        "median": 225,
+        "p10": 125,
+        "p90": 375
+      },
+      "cardBankNetPerPlayer": {
+        "median": 439.375,
+        "p10": 225,
+        "p90": 687.5
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1450,
+          "p10": 1002,
+          "p90": 1842
+        },
+        "10": {
+          "median": 1217,
+          "p10": 378,
+          "p90": 1870
+        },
+        "20": {
+          "median": 705,
+          "p10": 119,
+          "p90": 1954
+        },
+        "40": {
+          "median": 270.5,
+          "p10": 0,
+          "p90": 3275
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.03469006754512238,
+          "p10": 0.020243902439024408,
+          "p90": 0.053686635944700356
+        },
+        "10": {
+          "median": 0.04781876480718539,
+          "p10": 0.022486187845303762,
+          "p90": 0.08432835820895512
+        },
+        "20": {
+          "median": 0.16295537460286968,
+          "p10": 0.0612464854732897,
+          "p90": 0.4338697206919879
+        },
+        "40": {
+          "median": 0.565660495733088,
+          "p10": 0.3851733642826056,
+          "p90": 0.687948678784176
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": -0.2611892130733975,
+        "netWorth": 0.22448598588011132,
+        "properties": 0.29772541590802276,
+        "rentCollected": 0.2760502976566557
+      },
+      "round10LeaderWinRate": 0.368,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 48.125,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 48.125,
+          "comparator": "<=",
+          "threshold": 60
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.048,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 1.8069048295454544,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 1.8069048295454544,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.368,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    },
+    {
+      "board": "standard",
+      "players": 5,
+      "games": 250,
+      "seedStart": 3674578385,
+      "durationTurns": {
+        "median": 192,
+        "p10": 142,
+        "p90": 252
+      },
+      "durationRounds": {
+        "median": 48.400000000000006,
+        "p10": 34.4,
+        "p90": 69.2
+      },
+      "stalledRate": 0.044,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 4,
+        "p10": 4,
+        "p90": 4
+      },
+      "lapsPerPlayer": {
+        "median": 7.2,
+        "p10": 5,
+        "p90": 9.8
+      },
+      "startIncomePerPlayer": {
+        "median": 1580,
+        "p10": 1080,
+        "p90": 2180
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.9545454545454546,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 1,
+      "firstSetTurn": {
+        "median": 31,
+        "p10": 21,
+        "p90": 51
+      },
+      "firstBuildTurn": {
+        "median": 35,
+        "p10": 23,
+        "p90": 56
+      },
+      "firstBankruptcyTurn": {
+        "median": 123,
+        "p10": 89,
+        "p90": 175
+      },
+      "acquisitionQuarterTurn": {
+        "median": 11,
+        "p10": 7,
+        "p90": 15
+      },
+      "acquisitionHalfTurn": {
+        "median": 21,
+        "p10": 15,
+        "p90": 28
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 45,
+        "p10": 33,
+        "p90": 60
+      },
+      "auctionToListRatio": 0.03296391020176186,
+      "auctionSaleRate": 1,
+      "rentToStartIncome": {
+        "median": 2.1934694452266967,
+        "p10": 1.812375,
+        "p90": 2.841139240506329
+      },
+      "topRentShare": {
+        "median": 0.7215407021954507,
+        "p10": 0.5684491978609626,
+        "p90": 0.8843196853209369
+      },
+      "mortgageEvents": {
+        "median": 20,
+        "p10": 15,
+        "p90": 29
+      },
+      "unmortgageEvents": {
+        "median": 13,
+        "p10": 8,
+        "p90": 18
+      },
+      "liquidityEvents": {
+        "median": 9,
+        "p10": 6,
+        "p90": 14
+      },
+      "taxPaidPerPlayer": {
+        "median": 220,
+        "p10": 120,
+        "p90": 340
+      },
+      "cardBankNetPerPlayer": {
+        "median": 399.5,
+        "p10": 189,
+        "p90": 633
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1486,
+          "p10": 1019,
+          "p90": 1902
+        },
+        "10": {
+          "median": 1367,
+          "p10": 441,
+          "p90": 1925
+        },
+        "20": {
+          "median": 1051,
+          "p10": 82,
+          "p90": 2322
+        },
+        "40": {
+          "median": 102,
+          "p10": 0,
+          "p90": 4365
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.03979603837821122,
+          "p10": 0.022023701002734875,
+          "p90": 0.05736549165120608
+        },
+        "10": {
+          "median": 0.055494116684395856,
+          "p10": 0.02936619718309874,
+          "p90": 0.09963149078726974
+        },
+        "20": {
+          "median": 0.2598433919022155,
+          "p10": 0.09026080743122544,
+          "p90": 0.5109696969696971
+        },
+        "40": {
+          "median": 0.6684673772266758,
+          "p10": 0.5170599470149715,
+          "p90": 0.7581801299907149
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": -0.3322018097727101,
+        "netWorth": 0.25373682704290584,
+        "properties": 0.3529155536548308,
+        "rentCollected": 0.29229092791404054
+      },
+      "round10LeaderWinRate": 0.368,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 48.400000000000006,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 48.400000000000006,
+          "comparator": "<=",
+          "threshold": 60
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.044,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 2.1934694452266967,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 2.1934694452266967,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.368,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    },
+    {
+      "board": "standard",
+      "players": 6,
+      "games": 250,
+      "seedStart": 3674554248,
+      "durationTurns": {
+        "median": 214.5,
+        "p10": 161,
+        "p90": 283
+      },
+      "durationRounds": {
+        "median": 49.25,
+        "p10": 34.166666666666664,
+        "p90": 67.83333333333333
+      },
+      "stalledRate": 0.012,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 5,
+        "p10": 5,
+        "p90": 5
+      },
+      "lapsPerPlayer": {
+        "median": 6.5,
+        "p10": 4.666666666666667,
+        "p90": 9.166666666666666
+      },
+      "startIncomePerPlayer": {
+        "median": 1433.3333333333333,
+        "p10": 1016.6666666666666,
+        "p90": 1983.3333333333333
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.9545454545454546,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 1,
+      "firstSetTurn": {
+        "median": 37,
+        "p10": 25,
+        "p90": 55
+      },
+      "firstBuildTurn": {
+        "median": 37,
+        "p10": 25,
+        "p90": 59
+      },
+      "firstBankruptcyTurn": {
+        "median": 130,
+        "p10": 91,
+        "p90": 185
+      },
+      "acquisitionQuarterTurn": {
+        "median": 11,
+        "p10": 8,
+        "p90": 15
+      },
+      "acquisitionHalfTurn": {
+        "median": 22,
+        "p10": 16,
+        "p90": 28
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 43,
+        "p10": 33,
+        "p90": 57
+      },
+      "auctionToListRatio": 0.019146220394270316,
+      "auctionSaleRate": 1,
+      "rentToStartIncome": {
+        "median": 2.46644176013805,
+        "p10": 1.984705882352941,
+        "p90": 3.229054054054054
+      },
+      "topRentShare": {
+        "median": 0.7353508525879132,
+        "p10": 0.575434065145645,
+        "p90": 0.8822978039635779
+      },
+      "mortgageEvents": {
+        "median": 21,
+        "p10": 16,
+        "p90": 29
+      },
+      "unmortgageEvents": {
+        "median": 14,
+        "p10": 10,
+        "p90": 19
+      },
+      "liquidityEvents": {
+        "median": 10,
+        "p10": 7,
+        "p90": 14
+      },
+      "taxPaidPerPlayer": {
+        "median": 200,
+        "p10": 116.66666666666667,
+        "p90": 316.6666666666667
+      },
+      "cardBankNetPerPlayer": {
+        "median": 374.16666666666663,
+        "p10": 199.16666666666666,
+        "p90": 636.6666666666666
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1530,
+          "p10": 1100,
+          "p90": 1931
+        },
+        "10": {
+          "median": 1465,
+          "p10": 447,
+          "p90": 2025
+        },
+        "20": {
+          "median": 1260.5,
+          "p10": 0,
+          "p90": 2714
+        },
+        "40": {
+          "median": 0,
+          "p10": 0,
+          "p90": 5538
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.04300143933621192,
+          "p10": 0.02799657534246558,
+          "p90": 0.05874462161478089
+        },
+        "10": {
+          "median": 0.05908053479313602,
+          "p10": 0.034702549575070796,
+          "p90": 0.11120409112040908
+        },
+        "20": {
+          "median": 0.32679112932666443,
+          "p10": 0.1106886114264094,
+          "p90": 0.611677131461517
+        },
+        "40": {
+          "median": 0.724402066363283,
+          "p10": 0.6125864971011781,
+          "p90": 0.8022343153157867
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": -0.3875526738122252,
+        "netWorth": 0.2916420287250726,
+        "properties": 0.4053005570731485,
+        "rentCollected": 0.31744774763873684
+      },
+      "round10LeaderWinRate": 0.364,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 49.25,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 49.25,
+          "comparator": "<=",
+          "threshold": 60
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.012,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 2.46644176013805,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 2.46644176013805,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.364,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    },
+    {
+      "board": "grand",
+      "players": 6,
+      "games": 250,
+      "seedStart": 3674549656,
+      "durationTurns": {
+        "median": 205.5,
+        "p10": 148,
+        "p90": 283
+      },
+      "durationRounds": {
+        "median": 47.166666666666664,
+        "p10": 31.666666666666668,
+        "p90": 80
+      },
+      "stalledRate": 0.112,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 5,
+        "p10": 4,
+        "p90": 5
+      },
+      "lapsPerPlayer": {
+        "median": 5.166666666666667,
+        "p10": 3.5,
+        "p90": 7.166666666666667
+      },
+      "startIncomePerPlayer": {
+        "median": 1133.3333333333333,
+        "p10": 783.3333333333334,
+        "p90": 1583.3333333333333
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.9333333333333333,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 1,
+      "firstSetTurn": {
+        "median": 13,
+        "p10": 7,
+        "p90": 31
+      },
+      "firstBuildTurn": {
+        "median": 13,
+        "p10": 7,
+        "p90": 32
+      },
+      "firstBankruptcyTurn": {
+        "median": 115,
+        "p10": 77,
+        "p90": 162
+      },
+      "acquisitionQuarterTurn": {
+        "median": 18,
+        "p10": 13,
+        "p90": 23
+      },
+      "acquisitionHalfTurn": {
+        "median": 32,
+        "p10": 26,
+        "p90": 38
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 61,
+        "p10": 48,
+        "p90": 79
+      },
+      "auctionToListRatio": 0.17411212865758321,
+      "auctionSaleRate": 1,
+      "rentToStartIncome": {
+        "median": 2.599000612494896,
+        "p10": 2.185076923076923,
+        "p90": 3.197948717948718
+      },
+      "topRentShare": {
+        "median": 0.68637969382475,
+        "p10": 0.5059366437533048,
+        "p90": 0.8558228020111428
+      },
+      "mortgageEvents": {
+        "median": 29,
+        "p10": 23,
+        "p90": 40
+      },
+      "unmortgageEvents": {
+        "median": 18,
+        "p10": 12,
+        "p90": 25
+      },
+      "liquidityEvents": {
+        "median": 15.5,
+        "p10": 11,
+        "p90": 22
+      },
+      "taxPaidPerPlayer": {
+        "median": 141.66666666666669,
+        "p10": 66.66666666666667,
+        "p90": 233.33333333333334
+      },
+      "cardBankNetPerPlayer": {
+        "median": 345,
+        "p10": 185,
+        "p90": 537.5
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1218,
+          "p10": 392,
+          "p90": 1836
+        },
+        "10": {
+          "median": 617,
+          "p10": 217,
+          "p90": 1584
+        },
+        "20": {
+          "median": 342,
+          "p10": 0,
+          "p90": 1778
+        },
+        "40": {
+          "median": 0,
+          "p10": 0,
+          "p90": 1783
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.039333204166380975,
+          "p10": 0.023327805417357572,
+          "p90": 0.059523809523809534
+        },
+        "10": {
+          "median": 0.11273936764776626,
+          "p10": 0.04916420845624381,
+          "p90": 0.24488270172724924
+        },
+        "20": {
+          "median": 0.4083973077578492,
+          "p10": 0.19980237154150182,
+          "p90": 0.632591049181751
+        },
+        "40": {
+          "median": 0.7120546043498379,
+          "p10": 0.5778944595001505,
+          "p90": 0.8058236611688046
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": 0.12080794771809573,
+        "netWorth": 0.4613948155580845,
+        "properties": 0.2845729274971226,
+        "rentCollected": 0.49496350260080807
+      },
+      "round10LeaderWinRate": 0.532,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 47.166666666666664,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 47.166666666666664,
+          "comparator": "<=",
+          "threshold": 65
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.112,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 2.599000612494896,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 2.599000612494896,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.532,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    },
+    {
+      "board": "grand",
+      "players": 7,
+      "games": 250,
+      "seedStart": 3674393427,
+      "durationTurns": {
+        "median": 223.5,
+        "p10": 171,
+        "p90": 297
+      },
+      "durationRounds": {
+        "median": 46.57142857142857,
+        "p10": 32.57142857142857,
+        "p90": 73.85714285714286
+      },
+      "stalledRate": 0.08,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 6,
+        "p10": 6,
+        "p90": 6
+      },
+      "lapsPerPlayer": {
+        "median": 4.714285714285714,
+        "p10": 3.4285714285714284,
+        "p90": 6.428571428571429
+      },
+      "startIncomePerPlayer": {
+        "median": 1028.5714285714287,
+        "p10": 742.8571428571429,
+        "p90": 1414.2857142857142
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.9333333333333333,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 1,
+      "firstSetTurn": {
+        "median": 15,
+        "p10": 8,
+        "p90": 22
+      },
+      "firstBuildTurn": {
+        "median": 15,
+        "p10": 8,
+        "p90": 25
+      },
+      "firstBankruptcyTurn": {
+        "median": 112,
+        "p10": 77,
+        "p90": 159
+      },
+      "acquisitionQuarterTurn": {
+        "median": 19,
+        "p10": 13,
+        "p90": 24
+      },
+      "acquisitionHalfTurn": {
+        "median": 34,
+        "p10": 28,
+        "p90": 41
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 61,
+        "p10": 48,
+        "p90": 77
+      },
+      "auctionToListRatio": 0.14731502922042122,
+      "auctionSaleRate": 1,
+      "rentToStartIncome": {
+        "median": 3.084775641025641,
+        "p10": 2.503888888888889,
+        "p90": 3.7261344537815124
+      },
+      "topRentShare": {
+        "median": 0.6595429670130748,
+        "p10": 0.51784375468586,
+        "p90": 0.8031863842856228
+      },
+      "mortgageEvents": {
+        "median": 32,
+        "p10": 25,
+        "p90": 40
+      },
+      "unmortgageEvents": {
+        "median": 21,
+        "p10": 14,
+        "p90": 27
+      },
+      "liquidityEvents": {
+        "median": 17,
+        "p10": 13,
+        "p90": 23
+      },
+      "taxPaidPerPlayer": {
+        "median": 128.57142857142858,
+        "p10": 71.42857142857143,
+        "p90": 214.28571428571428
+      },
+      "cardBankNetPerPlayer": {
+        "median": 306.7857142857143,
+        "p10": 164.28571428571428,
+        "p90": 456.42857142857144
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1260,
+          "p10": 406,
+          "p90": 1900
+        },
+        "10": {
+          "median": 698,
+          "p10": 202,
+          "p90": 1744
+        },
+        "20": {
+          "median": 338,
+          "p10": 0,
+          "p90": 2278
+        },
+        "40": {
+          "median": 0,
+          "p10": 0,
+          "p90": 1995
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.043884407073038645,
+          "p10": 0.02490739813795173,
+          "p90": 0.06450760079312623
+        },
+        "10": {
+          "median": 0.1429565240531152,
+          "p10": 0.060654815968167464,
+          "p90": 0.3017142857142858
+        },
+        "20": {
+          "median": 0.49594793542972415,
+          "p10": 0.2654499685336691,
+          "p90": 0.6790163040864421
+        },
+        "40": {
+          "median": 0.7606038372074873,
+          "p10": 0.6520371870751569,
+          "p90": 0.8332385292807456
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": 0.17249996274081705,
+        "netWorth": 0.4898931696862751,
+        "properties": 0.2999064035698217,
+        "rentCollected": 0.5314234838586028
+      },
+      "round10LeaderWinRate": 0.556,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 46.57142857142857,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 46.57142857142857,
+          "comparator": "<=",
+          "threshold": 65
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.08,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 3.084775641025641,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 3.084775641025641,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.556,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    },
+    {
+      "board": "grand",
+      "players": 8,
+      "games": 250,
+      "seedStart": 3674368362,
+      "durationTurns": {
+        "median": 249,
+        "p10": 194,
+        "p90": 327
+      },
+      "durationRounds": {
+        "median": 48.375,
+        "p10": 33.625,
+        "p90": 75.25
+      },
+      "stalledRate": 0.076,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 7,
+        "p10": 7,
+        "p90": 7
+      },
+      "lapsPerPlayer": {
+        "median": 4.625,
+        "p10": 3.375,
+        "p90": 6.25
+      },
+      "startIncomePerPlayer": {
+        "median": 1012.5,
+        "p10": 762.5,
+        "p90": 1362.5
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.9666666666666667,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 1,
+      "firstSetTurn": {
+        "median": 9,
+        "p10": 9,
+        "p90": 25
+      },
+      "firstBuildTurn": {
+        "median": 12,
+        "p10": 9,
+        "p90": 26
+      },
+      "firstBankruptcyTurn": {
+        "median": 125,
+        "p10": 87,
+        "p90": 180
+      },
+      "acquisitionQuarterTurn": {
+        "median": 19,
+        "p10": 14,
+        "p90": 25
+      },
+      "acquisitionHalfTurn": {
+        "median": 36,
+        "p10": 29,
+        "p90": 43
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 63,
+        "p10": 51,
+        "p90": 82
+      },
+      "auctionToListRatio": 0.11228650137741047,
+      "auctionSaleRate": 1,
+      "rentToStartIncome": {
+        "median": 3.357772603362108,
+        "p10": 2.725151515151515,
+        "p90": 4.128840579710145
+      },
+      "topRentShare": {
+        "median": 0.626892556973009,
+        "p10": 0.4929655830220173,
+        "p90": 0.7948897633550752
+      },
+      "mortgageEvents": {
+        "median": 33,
+        "p10": 26,
+        "p90": 45
+      },
+      "unmortgageEvents": {
+        "median": 22.5,
+        "p10": 16,
+        "p90": 29
+      },
+      "liquidityEvents": {
+        "median": 18,
+        "p10": 14,
+        "p90": 24
+      },
+      "taxPaidPerPlayer": {
+        "median": 137.5,
+        "p10": 75,
+        "p90": 200
+      },
+      "cardBankNetPerPlayer": {
+        "median": 313.125,
+        "p10": 160,
+        "p90": 458.75
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1300,
+          "p10": 430,
+          "p90": 1932
+        },
+        "10": {
+          "median": 854,
+          "p10": 203,
+          "p90": 1851
+        },
+        "20": {
+          "median": 379.5,
+          "p10": 0,
+          "p90": 2869
+        },
+        "40": {
+          "median": 0,
+          "p10": 0,
+          "p90": 2425
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.045282834259931404,
+          "p10": 0.03035928143712585,
+          "p90": 0.06905325443786992
+        },
+        "10": {
+          "median": 0.1667473121465758,
+          "p10": 0.08633658008658007,
+          "p90": 0.2987448316597756
+        },
+        "20": {
+          "median": 0.5422020850503096,
+          "p10": 0.321124763705104,
+          "p90": 0.705278825893076
+        },
+        "40": {
+          "median": 0.7836322186067632,
+          "p10": 0.7059864999446719,
+          "p90": 0.8498535542772705
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": 0.18923199699908427,
+        "netWorth": 0.5111761860475067,
+        "properties": 0.3474826602773224,
+        "rentCollected": 0.5659441444381644
+      },
+      "round10LeaderWinRate": 0.58,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 48.375,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 48.375,
+          "comparator": "<=",
+          "threshold": 55
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.076,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 3.357772603362108,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 3.357772603362108,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.58,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    },
+    {
+      "board": "grand",
+      "players": 9,
+      "games": 250,
+      "seedStart": 3674412861,
+      "durationTurns": {
+        "median": 260,
+        "p10": 206,
+        "p90": 339
+      },
+      "durationRounds": {
+        "median": 47.666666666666664,
+        "p10": 33.77777777777778,
+        "p90": 74.22222222222223
+      },
+      "stalledRate": 0.08,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 8,
+        "p10": 8,
+        "p90": 8
+      },
+      "lapsPerPlayer": {
+        "median": 4.333333333333333,
+        "p10": 3.2222222222222223,
+        "p90": 5.666666666666667
+      },
+      "startIncomePerPlayer": {
+        "median": 955.5555555555555,
+        "p10": 700,
+        "p90": 1244.4444444444443
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.9666666666666667,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 1,
+      "firstSetTurn": {
+        "median": 10,
+        "p10": 10,
+        "p90": 19
+      },
+      "firstBuildTurn": {
+        "median": 13,
+        "p10": 10,
+        "p90": 28
+      },
+      "firstBankruptcyTurn": {
+        "median": 123,
+        "p10": 81,
+        "p90": 170
+      },
+      "acquisitionQuarterTurn": {
+        "median": 20,
+        "p10": 14,
+        "p90": 27
+      },
+      "acquisitionHalfTurn": {
+        "median": 38,
+        "p10": 31,
+        "p90": 45
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 62,
+        "p10": 51,
+        "p90": 81
+      },
+      "auctionToListRatio": 0.09872331058771737,
+      "auctionSaleRate": 1,
+      "rentToStartIncome": {
+        "median": 3.8567824422261725,
+        "p10": 3.0961764705882353,
+        "p90": 4.56935064935065
+      },
+      "topRentShare": {
+        "median": 0.6161395005070428,
+        "p10": 0.4892109595484478,
+        "p90": 0.7634038960255715
+      },
+      "mortgageEvents": {
+        "median": 33,
+        "p10": 26,
+        "p90": 44
+      },
+      "unmortgageEvents": {
+        "median": 23,
+        "p10": 17,
+        "p90": 30
+      },
+      "liquidityEvents": {
+        "median": 19,
+        "p10": 15,
+        "p90": 24
+      },
+      "taxPaidPerPlayer": {
+        "median": 122.22222222222223,
+        "p10": 77.77777777777777,
+        "p90": 177.77777777777777
+      },
+      "cardBankNetPerPlayer": {
+        "median": 278.6111111111111,
+        "p10": 147.22222222222223,
+        "p90": 445.55555555555554
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1343,
+          "p10": 437,
+          "p90": 1961
+        },
+        "10": {
+          "median": 967.5,
+          "p10": 187,
+          "p90": 1965
+        },
+        "20": {
+          "median": 323,
+          "p10": 0,
+          "p90": 3432
+        },
+        "40": {
+          "median": 0,
+          "p10": 0,
+          "p90": 3084
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.05030216620773964,
+          "p10": 0.03232541396688271,
+          "p90": 0.07626761157512862
+        },
+        "10": {
+          "median": 0.21686593563313383,
+          "p10": 0.09012846517917517,
+          "p90": 0.3660234556868456
+        },
+        "20": {
+          "median": 0.6147998703702785,
+          "p10": 0.4071374312692735,
+          "p90": 0.7390136682120299
+        },
+        "40": {
+          "median": 0.8125289419599886,
+          "p10": 0.7283725050521828,
+          "p90": 0.8673532330302787
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": 0.2660726055418405,
+        "netWorth": 0.537070033611295,
+        "properties": 0.3850212459973966,
+        "rentCollected": 0.5739583468144689
+      },
+      "round10LeaderWinRate": 0.604,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 47.666666666666664,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 47.666666666666664,
+          "comparator": "<=",
+          "threshold": 55
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.08,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 3.8567824422261725,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 3.8567824422261725,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.604,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    },
+    {
+      "board": "grand",
+      "players": 10,
+      "games": 250,
+      "seedStart": 3674257140,
+      "durationTurns": {
+        "median": 282,
+        "p10": 232,
+        "p90": 370
+      },
+      "durationRounds": {
+        "median": 50.349999999999994,
+        "p10": 36.4,
+        "p90": 76.2
+      },
+      "stalledRate": 0.088,
+      "earlyBankruptcyRate": 0,
+      "bankruptcies": {
+        "median": 9,
+        "p10": 9,
+        "p90": 9
+      },
+      "lapsPerPlayer": {
+        "median": 4.2,
+        "p10": 3.3,
+        "p90": 5.6
+      },
+      "startIncomePerPlayer": {
+        "median": 925,
+        "p10": 720,
+        "p90": 1240
+      },
+      "ownershipSaturation": {
+        "median": 1,
+        "p10": 0.9666666666666667,
+        "p90": 1
+      },
+      "firstSetRate": 1,
+      "firstBuildRate": 1,
+      "bankruptcyGameRate": 1,
+      "firstSetTurn": {
+        "median": 11,
+        "p10": 11,
+        "p90": 21
+      },
+      "firstBuildTurn": {
+        "median": 13,
+        "p10": 11,
+        "p90": 24
+      },
+      "firstBankruptcyTurn": {
+        "median": 130,
+        "p10": 88,
+        "p90": 182
+      },
+      "acquisitionQuarterTurn": {
+        "median": 21,
+        "p10": 16,
+        "p90": 28
+      },
+      "acquisitionHalfTurn": {
+        "median": 40,
+        "p10": 33,
+        "p90": 46
+      },
+      "acquisitionThreeQuarterTurn": {
+        "median": 65,
+        "p10": 53,
+        "p90": 80
+      },
+      "auctionToListRatio": 0.08164612676056338,
+      "auctionSaleRate": 1,
+      "rentToStartIncome": {
+        "median": 4.1505624999999995,
+        "p10": 3.286808510638298,
+        "p90": 5.025625
+      },
+      "topRentShare": {
+        "median": 0.5938936681040561,
+        "p10": 0.4774710861064823,
+        "p90": 0.7242866622428666
+      },
+      "mortgageEvents": {
+        "median": 36,
+        "p10": 27,
+        "p90": 46
+      },
+      "unmortgageEvents": {
+        "median": 25,
+        "p10": 19,
+        "p90": 32
+      },
+      "liquidityEvents": {
+        "median": 21,
+        "p10": 16,
+        "p90": 26
+      },
+      "taxPaidPerPlayer": {
+        "median": 125,
+        "p10": 80,
+        "p90": 180
+      },
+      "cardBankNetPerPlayer": {
+        "median": 276.75,
+        "p10": 151,
+        "p90": 409
+      },
+      "cashAtRounds": {
+        "5": {
+          "median": 1394.5,
+          "p10": 442,
+          "p90": 1994
+        },
+        "10": {
+          "median": 980,
+          "p10": 201,
+          "p90": 2079
+        },
+        "20": {
+          "median": 300.5,
+          "p10": 0,
+          "p90": 3930
+        },
+        "40": {
+          "median": 0,
+          "p10": 0,
+          "p90": 3572
+        }
+      },
+      "cashGiniAtRounds": {
+        "5": {
+          "median": 0.053334795545048275,
+          "p10": 0.03406037000973705,
+          "p90": 0.07731660231660231
+        },
+        "10": {
+          "median": 0.2340134751300912,
+          "p10": 0.11901477832512297,
+          "p90": 0.3808529308529307
+        },
+        "20": {
+          "median": 0.6344556278359369,
+          "p10": 0.4823711886207156,
+          "p90": 0.7533982240437158
+        },
+        "40": {
+          "median": 0.8302997175913271,
+          "p10": 0.7614647501711156,
+          "p90": 0.8778703423205088
+        }
+      },
+      "winnerCorrelationsAtRound10": {
+        "cash": 0.2612548782624913,
+        "netWorth": 0.5106566078917981,
+        "properties": 0.3820002028584978,
+        "rentCollected": 0.5284223546801633
+      },
+      "round10LeaderWinRate": 0.564,
+      "criteria": [
+        {
+          "id": "median-rounds-min",
+          "passed": true,
+          "observed": 50.349999999999994,
+          "comparator": ">=",
+          "threshold": 8
+        },
+        {
+          "id": "median-rounds-max",
+          "passed": true,
+          "observed": 50.349999999999994,
+          "comparator": "<=",
+          "threshold": 55
+        },
+        {
+          "id": "stalled-rate",
+          "passed": true,
+          "observed": 0.088,
+          "comparator": "<=",
+          "threshold": 0.2
+        },
+        {
+          "id": "early-bankruptcy-rate",
+          "passed": true,
+          "observed": 0,
+          "comparator": "<=",
+          "threshold": 0.15
+        },
+        {
+          "id": "ownership-saturation",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.72
+        },
+        {
+          "id": "set-formation-rate",
+          "passed": true,
+          "observed": 1,
+          "comparator": ">=",
+          "threshold": 0.75
+        },
+        {
+          "id": "rent-vs-start-income-min",
+          "passed": true,
+          "observed": 4.1505624999999995,
+          "comparator": ">=",
+          "threshold": 0.15
+        },
+        {
+          "id": "rent-vs-start-income-max",
+          "passed": true,
+          "observed": 4.1505624999999995,
+          "comparator": "<=",
+          "threshold": 5
+        },
+        {
+          "id": "early-leader-win-rate",
+          "passed": true,
+          "observed": 0.564,
+          "comparator": "<=",
+          "threshold": 0.75
+        }
+      ],
+      "decision": "PASS"
+    }
+  ]
+}

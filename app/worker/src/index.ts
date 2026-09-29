@@ -3,8 +3,9 @@ import { AuthStore } from "./auth-do";
 import type { ConsumeResult, OAuthTransaction, TransactionStore } from "./auth-store";
 import { handleCallback, sanitizeRoomCode, startAuth, type FlowDeps } from "./auth-flow";
 import { reserveRoomCreation } from "./finalization";
-import { GameRoom, NAME_HEADER, USER_HEADER } from "./game-room";
+import { GameRoom, NAME_HEADER, RING_HEADER, USER_HEADER } from "./game-room";
 import { d1Identity, type IdentityStore, type UserRecord } from "./identity";
+import { equippedRing, equipCosmetic, loadProfile, purchaseCosmetic } from "./profile";
 import { createGoogleProvider } from "./oidc";
 import { clearCookie, parseCookies, SESSION_COOKIE, verifySession } from "./session";
 
@@ -76,6 +77,39 @@ async function createRoom(env: Env, user: UserRecord): Promise<Response> {
   return json({ error: "ROOM_TEMPORARILY_UNAVAILABLE" }, 503);
 }
 
+const MAX_BODY_LENGTH = 1024;
+
+/** Small strict JSON body for profile actions; null when missing, oversized or malformed. */
+async function smallJson(request: Request): Promise<Record<string, unknown> | null> {
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_LENGTH) return null;
+  const text = await request.text();
+  if (text.length > MAX_BODY_LENGTH) return null;
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+/** META-001..007 profile API: reads are derived server-side; writes are same-origin POSTs. */
+async function profileRoute(request: Request, env: Env, url: URL, user: UserRecord): Promise<Response> {
+  if (url.pathname === "/api/profile" && request.method === "GET") return json(await loadProfile(env.DB, user));
+  if (request.method !== "POST") return json({ error: "NOT_FOUND" }, 404);
+  if (!sameOrigin(request, url)) return json({ error: "FORBIDDEN_ORIGIN" }, 403);
+  const body = await smallJson(request);
+  if (url.pathname === "/api/profile/purchase" && body !== null && typeof body.itemId === "string" && Object.keys(body).length === 1) {
+    const result = await purchaseCosmetic(env.DB, user, body.itemId, Date.now());
+    return json(result, result.ok ? 200 : 409);
+  }
+  if (url.pathname === "/api/profile/equip" && body !== null && (body.kind === "RING" || body.kind === "TITLE")
+    && (typeof body.itemId === "string" || body.itemId === null) && Object.keys(body).length === 2) {
+    const result = await equipCosmetic(env.DB, user, body.kind, body.itemId);
+    return json(result, result.ok ? 200 : 409);
+  }
+  return json({ error: "BAD_REQUEST" }, 400);
+}
+
 async function openRoomSocket(request: Request, env: Env, url: URL, rawCode: string, user: UserRecord): Promise<Response> {
   const roomCode = sanitizeRoomCode(rawCode);
   if (roomCode === null) return json({ error: "ROOM_NOT_FOUND" }, 404);
@@ -84,6 +118,9 @@ async function openRoomSocket(request: Request, env: Env, url: URL, rawCode: str
   const headers = new Headers(request.headers);
   headers.set(USER_HEADER, user.userId);
   headers.set(NAME_HEADER, user.displayName);
+  const ring = await equippedRing(env.DB, user.userId);
+  if (ring === null) headers.delete(RING_HEADER);
+  else headers.set(RING_HEADER, ring);
   return env.GAME_ROOM.getByName(roomCode).fetch(new Request(request, { headers }));
 }
 
@@ -108,6 +145,7 @@ export default {
       const user = await sessionUser(request, env, identity);
       if (user === null) return json({ error: "AUTHENTICATION_REQUIRED" }, 401);
       if (url.pathname === "/api/me") return json(user);
+      if (url.pathname.startsWith("/api/profile")) return profileRoute(request, env, url, user);
       if (url.pathname === "/api/rooms" && request.method === "POST") {
         return sameOrigin(request, url) ? createRoom(env, user) : json({ error: "FORBIDDEN_ORIGIN" }, 403);
       }

@@ -17,8 +17,8 @@ export function memoryD1(): D1Database {
     first: async () => db.prepare(sql).get(...params) ?? null,
     all: async () => ({ results: db.prepare(sql).all(...params), success: true }),
     run: async () => {
-      db.prepare(sql).run(...params);
-      return { success: true, meta: {} };
+      const result = db.prepare(sql).run(...params);
+      return { success: true, meta: { changes: Number(result.changes) } };
     },
     execute: () => db.prepare(sql).run(...params),
   });

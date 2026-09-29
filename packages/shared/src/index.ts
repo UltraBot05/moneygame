@@ -3,4 +3,5 @@
  * Transport- and framework-agnostic so both sides depend on one contract.
  */
 
+export * from "./profile";
 export * from "./protocol";

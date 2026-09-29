@@ -15,7 +15,11 @@ import {
 } from "./view-model";
 
 export function Token({ player, size, active = false }: { player: PlayerModel; size?: number; active?: boolean }) {
-  const style: CSSProperties = { background: player.color, ...(size === undefined ? {} : { width: size, height: size, fontSize: size * 0.4 }) };
+  const style: CSSProperties = {
+    background: player.color,
+    ...(player.ring === null ? {} : { outline: "2px solid " + player.ring, outlineOffset: 1 }),
+    ...(size === undefined ? {} : { width: size, height: size, fontSize: size * 0.4 }),
+  };
   return <span className={"token" + (active ? " active" : "")} style={style} title={player.name}>{player.initials}</span>;
 }
 

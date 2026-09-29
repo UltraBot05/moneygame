@@ -93,7 +93,7 @@ class LocalRoom implements RoomPort {
       roomCode: "PREVIEW", hostUserId: "p0", phase: this.lobby ? "LOBBY" : "IN_GAME", paused: this.paused,
       settings: this.lobby ? this.settings : { ...DEFAULT_ROOM_SETTINGS, boardRef: this.ref as RoomView["settings"]["boardRef"] },
       members: NAMES.slice(0, this.count).map((displayName, seatIndex) => ({
-        userId: "p" + seatIndex, displayName, seatIndex, ready: !this.lobby || this.ready.has("p" + seatIndex), connected: seatIndex !== 3, away: false,
+        userId: "p" + seatIndex, displayName, seatIndex, ready: !this.lobby || this.ready.has("p" + seatIndex), connected: seatIndex !== 3, away: false, ring: seatIndex === 1 ? "#E3BC63" : null,
       })),
       turnDeadlineAt: this.paused ? null : Date.now() + 60_000,
     };

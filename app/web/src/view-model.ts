@@ -221,6 +221,8 @@ export interface PlayerModel {
   readonly connected: boolean;
   readonly away: boolean;
   readonly teamId: string | null;
+  /** Cosmetic token ring colour (looks only). */
+  readonly ring: string | null;
 }
 
 export function nameOf(room: RoomView, userId: string): string {
@@ -257,6 +259,7 @@ export function playerModels(game: ProjectedGameState, room: RoomView, board: Bo
       connected: member?.connected ?? false,
       away: member?.away ?? false,
       teamId: game.settings.teams.find((team) => team.memberUserIds.includes(player.userId))?.teamId ?? null,
+      ring: member?.ring ?? null,
     };
   });
 }
@@ -531,8 +534,11 @@ export function describeEvent(event: GameplayEvent, game: ProjectedGameState, bo
       return [names(event.playerId) + " mortgaged " + assetName(game, board, event.assetId) + " for " + money(event.amount) + "."];
     case "ASSET_UNMORTGAGED":
       return [names(event.playerId) + " paid " + money(event.amount) + " to unmortgage " + assetName(game, board, event.assetId) + "."];
-    case "CARD_RESOLVED":
-      return event.drawnCardIds.map((cardId) => names(event.playerId) + " drew " + (board.cardCopy[cardId]?.title ?? "a card") + ".");
+    case "CARD_RESOLVED": {
+      const lines = event.drawnCardIds.map((cardId) => names(event.playerId) + " drew " + (board.cardCopy[cardId]?.title ?? "a card") + ".");
+      if (event.startAward > 0) lines.push(names(event.playerId) + " collected " + money(event.startAward) + " at Start.");
+      return lines;
+    }
     case "HOLDING_RELEASED":
       return [names(event.playerId) + (event.method === "FEE" ? " paid " + money(CANDIDATE_RULES.holdingReleaseFee) + " to leave Holding." : " used a release card to leave Holding.")];
     case "TRADE_UPDATED": {

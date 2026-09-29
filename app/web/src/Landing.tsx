@@ -7,7 +7,7 @@ import { Feed } from "./Game";
 import type { RoomPort, RoomSnapshot } from "./room-client";
 import { initials, playerColor, type PlayerModel } from "./view-model";
 
-function PageTop({ me, children }: { me: Me | null | undefined; children?: ReactNode }) {
+export function PageTop({ me, children }: { me: Me | null | undefined; children?: ReactNode }) {
   return (
     <header className="page-top">
       <a className="brand" href="/">Money<span className="brand-dot">·</span>Game</a>
@@ -16,7 +16,7 @@ function PageTop({ me, children }: { me: Me | null | undefined; children?: React
         {me === null && <a className="btn btn-slate" href={loginUrl(null)} style={{ textDecoration: "none" }}>Sign in with Google</a>}
         {me != null && (
           <form method="post" action="/auth/logout" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontWeight: 700, color: "var(--on-slate)" }}>{me.displayName}</span>
+            <a href="/me" style={{ fontWeight: 700, color: "var(--on-slate)" }}>{me.displayName} · Profile</a>
             <button type="submit" className="btn btn-ghost" style={{ color: "var(--on-slate-mute)" }}>Sign out</button>
           </form>
         )}
@@ -133,7 +133,7 @@ function memberModel(member: RoomView["members"][number]): PlayerModel {
   return {
     userId: member.userId, name: member.displayName, initials: initials(member.displayName), color: playerColor(member.seatIndex),
     seatIndex: member.seatIndex, cash: 0, netWorth: 0, deeds: 0, active: false, bankrupt: false, inHolding: false,
-    connected: member.connected, away: member.away, teamId: null,
+    connected: member.connected, away: member.away, teamId: null, ring: member.ring,
   };
 }
 

@@ -1,3 +1,5 @@
+import type { CosmeticKind, ProfileActionResult, ProfileView } from "@moneygame/shared";
+
 /** Thin same-origin HTTP calls. Identity always comes from the server session cookie. */
 
 export interface Me {
@@ -35,3 +37,26 @@ export function cleanRoomCode(raw: string): string | null {
   const code = raw.trim().toUpperCase();
   return /^[A-Z0-9]{4,32}$/.test(code) ? code : null;
 }
+
+export async function getProfile(): Promise<ProfileView | null> {
+  try {
+    const response = await fetch("/api/profile", { credentials: "same-origin" });
+    return response.ok ? (await response.json()) as ProfileView : null;
+  } catch {
+    return null;
+  }
+}
+
+async function profileAction(path: string, body: unknown): Promise<ProfileActionResult | null> {
+  try {
+    const response = await fetch(path, {
+      method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    return response.status === 200 || response.status === 409 ? (await response.json()) as ProfileActionResult : null;
+  } catch {
+    return null;
+  }
+}
+
+export const purchaseCosmetic = (itemId: string) => profileAction("/api/profile/purchase", { itemId });
+export const equipCosmetic = (kind: CosmeticKind, itemId: string | null) => profileAction("/api/profile/equip", { kind, itemId });

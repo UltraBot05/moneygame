@@ -14,7 +14,7 @@ const { board, cards } = canonicalBoard(REF);
 const IDS = ["u-a", "u-b", "u-c"];
 const room: RoomView = {
   roomCode: "ROOM42", hostUserId: "u-a", phase: "IN_GAME", paused: false, settings: DEFAULT_ROOM_SETTINGS, turnDeadlineAt: null,
-  members: IDS.map((userId, seatIndex) => ({ userId, displayName: "Player " + userId.slice(2).toUpperCase(), seatIndex, ready: true, connected: true, away: false })),
+  members: IDS.map((userId, seatIndex) => ({ userId, displayName: "Player " + userId.slice(2).toUpperCase(), seatIndex, ready: true, connected: true, away: false, ring: null })),
 };
 
 function dice(...faces: number[]): () => number {

@@ -33,6 +33,8 @@ import type { SqlDb } from "./transition";
 /** Internal headers set only by the Worker from the verified session (never by clients). */
 export const USER_HEADER = "x-mg-user";
 export const NAME_HEADER = "x-mg-name";
+/** Equipped token ring colour, set by the Worker from D1 (never trusted from the client). */
+export const RING_HEADER = "x-mg-ring";
 
 /** Non-authoritative socket tag; every command re-checks the epoch against SQLite. */
 interface Attachment {
@@ -80,10 +82,11 @@ export class GameRoom extends DurableObject<Env> {
     if (request.headers.get("Upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
     const userId = request.headers.get(USER_HEADER);
     const displayName = request.headers.get(NAME_HEADER) ?? "Player";
+    const ring = request.headers.get(RING_HEADER);
     if (userId === null || userId === "") return new Response("unauthenticated", { status: 401 });
     const spectators = this.ctx.getWebSockets()
       .filter((ws) => (ws.deserializeAttachment() as Attachment | null)?.role === "SPECTATOR").length;
-    const admission = admit(this.db, { userId, displayName }, Date.now(), spectators);
+    const admission = admit(this.db, { userId, displayName, ring }, Date.now(), spectators);
     if (admission.role === "REFUSED") {
       return new Response(admission.reason, { status: admission.reason === "ROOM_FULL" ? 429 : 404 });
     }
