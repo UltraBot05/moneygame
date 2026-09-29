@@ -71,6 +71,24 @@ pnpm --filter @moneygame/worker exec wrangler d1 migrations apply moneygame --lo
 pnpm --filter @moneygame/worker exec wrangler dev
 ```
 
+### Signing in locally
+
+Google only returns a sign-in to redirect addresses registered on the OAuth client
+(`GOOGLE_CLIENT_ID` in `app/worker/wrangler.toml`). For local Google sign-in, add
+`http://localhost:5173/auth/callback` (and `http://localhost:8787/auth/callback` if you open the
+Worker directly) under Authorized redirect URIs in Google Cloud Console, and put the real
+`GOOGLE_CLIENT_SECRET` in `app/worker/.dev.vars`. Otherwise Google shows
+`Error 400: redirect_uri_mismatch`.
+
+To play locally without Google, start the Worker with the test sign-in enabled (localhost only,
+never in deployment) and open `http://127.0.0.1:8787/auth/test-login?name=YourName`; use other
+browser profiles with other names for more players. Build the web app first
+(`pnpm --filter @moneygame/web build`), since this Worker serves `app/web/dist`.
+
+```bash
+pnpm --filter @moneygame/worker exec wrangler dev --ip 127.0.0.1 --var E2E_TEST_LOGIN:1 --var SESSION_SECRET:local-dev-secret-0123456789
+```
+
 ## Scripts
 
 | Script | What it does |
