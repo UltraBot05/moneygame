@@ -22,6 +22,11 @@ SPIKE-008 bands at 250 seeds.
 ## Live runs
 
 - 4 browsers, 60 actions, chat, rejoin and session replacement: pass (local and CI).
-- 10 browsers, full Standard match: a first attempt stopped at the old 10-minute limit at turn 463
-  (game version 1100) with every client converged after every action and no failure; the full
-  run result is recorded below.
+- 4 browsers, **complete Standard match**: finished after 439 actions (v443) in 3.4 minutes;
+  every client converged after every action, all four showed the final standings, then rejoin
+  and replacement passed.
+- 10 browsers, Standard, driver without trading: 4,700+ actions (turn 2018) all converged, but
+  nobody went bankrupt, because without trades almost no set completes. Recorded as a balance
+  caveat in `RELEASE-GATES.md`; the driver now trades like the simulation bots.
+- 10 browsers, Grand, driver with trading: found the trade-dialog overflow (fixed, FINAL-AUDIT
+  #9) after 600 converged actions with six players out; the rerun result is recorded below.

@@ -71,6 +71,11 @@ caveats for the human decision:
 - Stalls: 1 to 11% of bot matches reach the round cap without a winner; watch for long human
   matches, especially Grand 6.
 - Card values are the approved v1 decks; the sign-off covers them.
+- No trading, no ending: a live 10-player Standard match driven by bots that bought and built
+  but never traded reached turn 2018 (about 200 rounds) with nobody bankrupt, because almost no
+  one completes a set without trades. The rules have no length cap (freeze: last standing only),
+  so a table that refuses to trade can run indefinitely. Decide whether that is acceptable or
+  whether a later module (for example a round limit with net-worth tiebreak) is wanted.
 Record the human decision (approve, or the specific retune to try) here.
 
 ## GRAND-005 human alpha

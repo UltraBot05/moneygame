@@ -63,3 +63,12 @@ test("keyboard: dialogs take focus and Escape closes panels", async ({ page }) =
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Trade" })).toHaveCount(0);
 });
+
+test("trade dialog keeps its actions on screen with a long deed list", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/dev/preview?board=grand&players=3&scene=debt");
+  await page.getByRole("button", { name: "Trade", exact: true }).click();
+  await page.locator(".dialog .trade-item").last().click();
+  expect(await page.locator(".trade-columns .trade-side").nth(1).locator(".trade-item").count()).toBeGreaterThan(10);
+  await expect(page.getByRole("button", { name: "Send offer" })).toBeInViewport();
+});
