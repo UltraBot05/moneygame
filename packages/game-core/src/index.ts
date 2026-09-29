@@ -14,6 +14,7 @@ export * from "./gameplay";
 export * from "./integrity";
 export * from "./lobby";
 export * from "./movement";
+export * from "./projection";
 export * from "./random";
 export * from "./rules";
 export * from "./state";

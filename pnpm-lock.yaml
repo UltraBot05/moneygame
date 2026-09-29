@@ -35,6 +35,9 @@ importers:
 
   app/web:
     dependencies:
+      '@moneygame/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
       '@moneygame/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -60,6 +63,9 @@ importers:
 
   app/worker:
     dependencies:
+      '@moneygame/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
       '@moneygame/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -70,7 +76,11 @@ importers:
 
   packages/game-core: {}
 
-  packages/shared: {}
+  packages/shared:
+    dependencies:
+      '@moneygame/game-core':
+        specifier: workspace:*
+        version: link:../game-core
 
 packages:
 

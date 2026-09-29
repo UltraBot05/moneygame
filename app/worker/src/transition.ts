@@ -41,6 +41,11 @@ export interface SqlDb {
     sql: string,
     ...params: (string | number)[]
   ): T | undefined;
+  /** Every row of a query, in order. */
+  all<T extends Record<string, string | number | null>>(
+    sql: string,
+    ...params: (string | number)[]
+  ): T[];
   transaction<T>(fn: () => T): T;
 }
 

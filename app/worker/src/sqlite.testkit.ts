@@ -14,6 +14,10 @@ export function nodeDb(db: DatabaseSync): SqlDb {
       query: string,
       ...params: (string | number)[]
     ): T | undefined => db.prepare(query).get(...params) as T | undefined,
+    all: <T extends Record<string, string | number | null>>(
+      query: string,
+      ...params: (string | number)[]
+    ): T[] => db.prepare(query).all(...params) as T[],
     transaction: <T>(fn: () => T): T => {
       db.exec("BEGIN");
       try {

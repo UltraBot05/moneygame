@@ -150,6 +150,16 @@ export class SpikeRoom extends DurableObject<Env> {
         this.rowsWritten += cursor.rowsWritten;
         return rows[0] as T | undefined;
       },
+      all: <T extends Record<string, string | number | null>>(
+        query: string,
+        ...params: (string | number)[]
+      ): T[] => {
+        const cursor = this.sql.exec(query, ...params);
+        const rows = cursor.toArray();
+        this.rowsRead += cursor.rowsRead;
+        this.rowsWritten += cursor.rowsWritten;
+        return rows as T[];
+      },
       transaction: <T>(fn: () => T): T => ctx.storage.transactionSync(fn),
     };
   }

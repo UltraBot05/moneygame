@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@moneygame/game-core": "workspace:*",
     "@moneygame/shared": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

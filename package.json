@@ -16,7 +16,7 @@
     "test:e2e": "playwright test",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "simulate:economy": "node --experimental-strip-types packages/game-core/src/spike-008/economy-cli.ts",
-    "build": "pnpm -r --if-present build",
+    "build": "pnpm --filter @moneygame/web build && pnpm --filter @moneygame/worker build",
     "simulate:reconciliation": "node --experimental-strip-types packages/game-core/src/spike-008/reconciliation-cli.ts"
   },
   "devDependencies": {

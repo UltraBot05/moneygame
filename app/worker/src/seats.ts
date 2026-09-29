@@ -205,3 +205,26 @@ export function seatStatus(db: SqlDb, userId: string): SeatStatus | undefined {
     leaseExpiresAt: seat.lease_expires_at,
   };
 }
+
+/**
+ * RUNTIME-E1 section 7: the explicit path back after an expired lease. Only the room runtime calls
+ * this, and only for a seated member; it issues a fresh epoch (so any older socket stays stale)
+ * and is reported as a REJOIN, which never earns the active-turn extension.
+ */
+export function rejoinSeat(db: SqlDb, userId: string): number {
+  return db.transaction((): number => {
+    const seat = db.get<{ connection_epoch: number }>(
+      `SELECT connection_epoch FROM seats WHERE user_id = ?;`,
+      userId,
+    );
+    const epoch = (seat?.connection_epoch ?? 0) + 1;
+    db.run(
+      `INSERT INTO seats (user_id, connection_epoch, connected, lease_expires_at) VALUES (?, ?, 1, NULL)
+         ON CONFLICT (user_id) DO UPDATE SET connection_epoch = ?, connected = 1, lease_expires_at = NULL;`,
+      userId,
+      epoch,
+      epoch,
+    );
+    return epoch;
+  });
+}

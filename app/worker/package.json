@@ -10,6 +10,7 @@
     "typecheck": "wrangler types && tsc --noEmit"
   },
   "dependencies": {
+    "@moneygame/game-core": "workspace:*",
     "@moneygame/shared": "workspace:*"
   },
   "devDependencies": {
