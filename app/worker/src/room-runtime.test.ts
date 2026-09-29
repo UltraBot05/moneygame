@@ -1,6 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { createSeededRandom } from "@moneygame/game-core";
 import { DEFAULT_ROOM_SETTINGS } from "@moneygame/shared";
 import {
   admit,
@@ -10,70 +9,15 @@ import {
   ensureRoomSchema,
   grantReconnectExtension,
   handleCommand,
-  handleLobby,
+  handleRoomAction,
   initializeRoom,
   nextAlarmAt,
   roomView,
   runDueTimeouts,
   viewerGame,
-  type RuntimeDeps,
 } from "./room-runtime";
+import { BEN, command, CY, deps, fresh, game, HOST, patchHost, startedRoom, T0 } from "./room.testkit";
 import { nodeDb } from "./sqlite.testkit";
-import type { SqlDb } from "./transition";
-
-const T0 = 1_000_000;
-const HOST = { userId: "u-host", displayName: "Host" };
-const BEN = { userId: "u-ben", displayName: "Ben" };
-const CY = { userId: "u-cy", displayName: "Cy" };
-
-/** Dice faces for the next rolls, then a seeded stream. */
-function deps(now: number, faces: readonly number[] = []): RuntimeDeps {
-  const queue = faces.map((face) => (face - 1) / 6 + 0.001);
-  const seeded = createSeededRandom(3);
-  return { now, rng: () => queue.shift() ?? seeded(), newGameId: () => "game-1" };
-}
-
-function fresh(): { db: DatabaseSync; sql: SqlDb } {
-  const db = new DatabaseSync(":memory:");
-  const sql = nodeDb(db);
-  ensureRoomSchema(sql);
-  initializeRoom(sql, "ROOM42", HOST, T0);
-  return { db, sql };
-}
-
-function lobbyWithThree(): { db: DatabaseSync; sql: SqlDb } {
-  const room = fresh();
-  for (const user of [HOST, BEN, CY]) {
-    admit(room.sql, user, T0);
-    handleLobby(room.sql, user.userId, { kind: "SET_READY", ready: true }, deps(T0));
-  }
-  return room;
-}
-
-function startedRoom() {
-  const room = lobbyWithThree();
-  expect(handleLobby(room.sql, HOST.userId, { kind: "START" }, deps(T0))).toMatchObject({ kind: "COMMITTED" });
-  return room;
-}
-
-function game(sql: SqlDb) {
-  const state = viewerGame(sql, HOST.userId);
-  if (state === null) throw new Error("no game");
-  return state;
-}
-
-/** Test-only: edits the stored canonical state (still fully revalidated on the next load). */
-function patchHost(sql: SqlDb, changes: Readonly<{ position?: number; cash?: number }>) {
-  const row = sql.get<{ state_json: string }>("SELECT state_json FROM games WHERE game_id = 'game-1';");
-  const state = JSON.parse(row?.state_json ?? "{}");
-  state.players[0] = { ...state.players[0], ...changes };
-  sql.run("UPDATE games SET state_json = ? WHERE game_id = 'game-1';", JSON.stringify(state));
-}
-
-function command(sql: SqlDb, type: string, payload: unknown = {}, actionId = type + ":" + game(sql).gameVersion) {
-  const state = game(sql);
-  return { type, gameId: state.gameId, actionId, expectedGameVersion: state.gameVersion, payload };
-}
 
 describe("RT-001 rooms, membership and lobby", () => {
   it("creates a room once and seats up to ten players before spectators", () => {
@@ -88,7 +32,7 @@ describe("RT-001 rooms, membership and lobby", () => {
 
     const empty = nodeDb(new DatabaseSync(":memory:"));
     ensureRoomSchema(empty);
-    expect(admit(empty, HOST, T0).role).toBe("REFUSED");
+    expect(admit(empty, HOST, T0)).toEqual({ role: "REFUSED", reason: "ROOM_NOT_FOUND" });
   });
 
   it("lets only the host configure and start, and only with three or more ready members", () => {
@@ -96,21 +40,20 @@ describe("RT-001 rooms, membership and lobby", () => {
     admit(room.sql, HOST, T0);
     admit(room.sql, BEN, T0);
     const grand = { ...DEFAULT_ROOM_SETTINGS, boardRef: "world-tour-grand@1" as const, turnSeconds: 45 as const };
-    expect(handleLobby(room.sql, BEN.userId, { kind: "CONFIGURE", settings: grand }, deps(T0)))
+    expect(handleRoomAction(room.sql, BEN.userId, { kind: "CONFIGURE", settings: grand }, deps(T0)))
       .toMatchObject({ reason: "NOT_HOST" });
-    expect(handleLobby(room.sql, HOST.userId, { kind: "LEAVE" }, deps(T0))).toMatchObject({ reason: "HOST_CANNOT_LEAVE" });
-    expect(handleLobby(room.sql, HOST.userId, { kind: "CONFIGURE", settings: { ...grand, startingCash: 900 } }, deps(T0)))
+    expect(handleRoomAction(room.sql, HOST.userId, { kind: "CONFIGURE", settings: { ...grand, startingCash: 900 } }, deps(T0)))
       .toMatchObject({ reason: "INVALID_SETTINGS" });
-    expect(handleLobby(room.sql, HOST.userId, { kind: "CONFIGURE", settings: grand }, deps(T0))).toMatchObject({ kind: "COMMITTED" });
+    expect(handleRoomAction(room.sql, HOST.userId, { kind: "CONFIGURE", settings: grand }, deps(T0))).toMatchObject({ kind: "COMMITTED" });
     expect(roomView(room.sql, T0)?.settings).toEqual(grand);
-    expect(handleLobby(room.sql, HOST.userId, { kind: "START" }, deps(T0))).toMatchObject({ reason: "NOT_ENOUGH_READY_PLAYERS" });
+    expect(handleRoomAction(room.sql, HOST.userId, { kind: "START" }, deps(T0))).toMatchObject({ reason: "NOT_ENOUGH_READY_PLAYERS" });
 
     admit(room.sql, CY, T0);
-    for (const user of [HOST, BEN, CY]) handleLobby(room.sql, user.userId, { kind: "SET_READY", ready: true }, deps(T0));
+    for (const user of [HOST, BEN, CY]) handleRoomAction(room.sql, user.userId, { kind: "SET_READY", ready: true }, deps(T0));
     const teams = { ...grand, matchMode: "TEAMS" as const, teams: [{ teamId: "solo", memberUserIds: [HOST.userId] }] };
-    handleLobby(room.sql, HOST.userId, { kind: "CONFIGURE", settings: teams }, deps(T0));
-    for (const user of [HOST, BEN, CY]) handleLobby(room.sql, user.userId, { kind: "SET_READY", ready: true }, deps(T0));
-    expect(handleLobby(room.sql, HOST.userId, { kind: "START" }, deps(T0))).toMatchObject({ reason: "INVALID_SETTINGS" });
+    handleRoomAction(room.sql, HOST.userId, { kind: "CONFIGURE", settings: teams }, deps(T0));
+    for (const user of [HOST, BEN, CY]) handleRoomAction(room.sql, user.userId, { kind: "SET_READY", ready: true }, deps(T0));
+    expect(handleRoomAction(room.sql, HOST.userId, { kind: "START" }, deps(T0))).toMatchObject({ reason: "INVALID_SETTINGS" });
   });
 
   it("starts a game from the lobby and arms the first turn clock", () => {
@@ -119,7 +62,7 @@ describe("RT-001 rooms, membership and lobby", () => {
     expect(view).toMatchObject({ phase: "IN_GAME", turnDeadlineAt: T0 + 90_000 });
     expect(game(sql)).toMatchObject({ phase: "ACTIVE_TURN", turn: { activePlayerId: HOST.userId } });
     expect(admit(sql, { userId: "u-new", displayName: "New" }, T0).role).toBe("SPECTATOR");
-    expect(handleLobby(sql, HOST.userId, { kind: "START" }, deps(T0))).toMatchObject({ reason: "NOT_IN_LOBBY" });
+    expect(handleRoomAction(sql, HOST.userId, { kind: "START" }, deps(T0))).toMatchObject({ reason: "NOT_IN_LOBBY" });
   });
 });
 
@@ -144,7 +87,7 @@ describe("RT-004/005/006 authoritative command path", () => {
     expect(game(sql)).toEqual(after);
 
     const woken = nodeDb(db);
-    expect(viewerGame(woken, HOST.userId)).toEqual(after);
+    expect(viewerGame(woken, HOST.userId)?.game).toEqual(after);
   });
 
   it("never sends deck order to any viewer", () => {

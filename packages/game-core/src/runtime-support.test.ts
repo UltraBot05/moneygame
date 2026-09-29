@@ -34,7 +34,7 @@ describe("RUNTIME-E1 turn timeout auto-play", () => {
       dice: [1, 2],
     }));
     refused(timeout(owing), "NOTHING_TO_AUTO_PLAY", owing);
-    expect(SYSTEM_COMMAND_TYPES).toEqual(new Set(["AUCTION_TIMEOUT", "DEBT_TIMEOUT", "TURN_TIMEOUT"]));
+    expect(SYSTEM_COMMAND_TYPES).toEqual(new Set(["AUCTION_TIMEOUT", "DEBT_TIMEOUT", "TURN_TIMEOUT", "RESUME_CLOCKS"]));
   });
 
   it("rolls, declines an unowned purchase, and stops at the auction others must decide", () => {
@@ -70,6 +70,20 @@ describe("RUNTIME-E1 turn timeout auto-play", () => {
     expect(attempt).toMatchObject({
       event: { steps: [{ type: "DICE_ROLLED", holding: "ATTEMPT_FAILED" }, { type: "TURN_ENDED" }] },
     });
+  });
+});
+
+describe("RT-010 resuming clocks after a pause", () => {
+  it("moves auction and debt deadlines by exactly the paused time", () => {
+    const idle = setup();
+    refused(run(idle, "RESUME_CLOCKS", "runtime", { pausedMs: 5000 }), "NO_CLOCKS_TO_RESUME", idle);
+    const buying = ok(run(setup({ positions: { [alice]: 3 } }), "ROLL_DICE", alice, {}, { dice: [1, 2] }));
+    const auction = ok(run(buying, "DECLINE_PROPERTY", alice, { resolutionId: buying.pendingResolution?.resolutionId }));
+    const resumed = ok(run(auction, "RESUME_CLOCKS", "runtime", { pausedMs: 5000 }));
+    expect(resumed.auction?.decisionDeadlineAt).toBe((auction.auction?.decisionDeadlineAt ?? 0) + 5000);
+    const owing = ok(run(setup({ positions: { [alice]: 11 }, cash: { [alice]: 50 } }), "ROLL_DICE", alice, {}, { dice: [1, 2] }));
+    const later = ok(run(owing, "RESUME_CLOCKS", "runtime", { pausedMs: 7000 }));
+    expect(later.ruleState.debt?.deadlineAt).toBe((owing.ruleState.debt?.deadlineAt ?? 0) + 7000);
   });
 });
 

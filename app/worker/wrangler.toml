@@ -29,11 +29,6 @@ migrations_dir = "migrations"
 name = "GAME_ROOM"
 class_name = "GameRoom"
 
-# SPIKE-001 evidence room, kept until the RT-015 spike-control cleanup.
-[[durable_objects.bindings]]
-name = "SPIKE_ROOM"
-class_name = "SpikeRoom"
-
 # SPIKE-003: one SQLite-backed Durable Object holding OAuth transaction state.
 [[durable_objects.bindings]]
 name = "AUTH_STORE"
@@ -50,3 +45,8 @@ new_sqlite_classes = ["AuthStore"]
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["GameRoom"]
+
+# RT-015: the SPIKE-001 measurement room (and its spike-only commands) is retired.
+[[migrations]]
+tag = "v4"
+deleted_classes = ["SpikeRoom"]

@@ -6,15 +6,21 @@ import {
   type ServerMessage,
   type ViewerRole,
 } from "@moneygame/shared";
+import { deliverFinalization } from "./finalization";
 import {
   admit,
   disconnect,
+  dueFinalizations,
   ensureRoomSchema,
   grantReconnectExtension,
   handleCommand,
-  handleLobby,
+  handleRoomAction,
   initializeRoom,
+  markFinalizationFailed,
+  markFinalized,
   nextAlarmAt,
+  postChat,
+  recentChat,
   roomView,
   runDueTimeouts,
   viewerGame,
@@ -39,9 +45,9 @@ interface Attachment {
 const cryptoRng: RandomSource = () => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 4294967296;
 
 /**
- * RT-001 … RT-008: one GameRoom per room code, reused across rematches. A thin adapter:
- * sockets use the Hibernation API, alarms drive every deadline, SQLite is the only truth,
- * and all rules live in room-runtime.ts and game-core.
+ * RT-001 … RT-018: one GameRoom per room code, reused across rematches. A thin adapter:
+ * sockets use the Hibernation API, the single alarm drives every deadline and finalization
+ * retry, SQLite is the only truth, and all rules live in room-runtime.ts and game-core.
  */
 export class GameRoom extends DurableObject<Env> {
   private readonly db: SqlDb;
@@ -75,18 +81,24 @@ export class GameRoom extends DurableObject<Env> {
     const userId = request.headers.get(USER_HEADER);
     const displayName = request.headers.get(NAME_HEADER) ?? "Player";
     if (userId === null || userId === "") return new Response("unauthenticated", { status: 401 });
-    const admission = admit(this.db, { userId, displayName }, Date.now());
-    if (admission.role === "REFUSED") return new Response("room not found", { status: 404 });
+    const spectators = this.ctx.getWebSockets()
+      .filter((ws) => (ws.deserializeAttachment() as Attachment | null)?.role === "SPECTATOR").length;
+    const admission = admit(this.db, { userId, displayName }, Date.now(), spectators);
+    if (admission.role === "REFUSED") {
+      return new Response(admission.reason, { status: admission.reason === "ROOM_FULL" ? 429 : 404 });
+    }
 
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server);
     const epoch = admission.role === "PLAYER" ? admission.epoch : 0;
-    server.serializeAttachment({ userId, epoch, role: admission.role } satisfies Attachment);
+    const attachment: Attachment = { userId, epoch, role: admission.role };
+    server.serializeAttachment(attachment);
     if (admission.role === "PLAYER") {
       this.replaceStaleSockets(userId, epoch, server);
       if (admission.kind === "RECONNECT" && grantReconnectExtension(this.db, userId)) await this.scheduleAlarm();
     }
-    this.broadcast(null);
+    this.broadcast(null, server);
+    this.send(server, this.stateFor(attachment, null, true));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -101,15 +113,22 @@ export class GameRoom extends DurableObject<Env> {
       if (typeof raw !== "string") throw new ProtocolError("MALFORMED_MESSAGE", "binary frames are not accepted");
       const message = parseClientMessage(raw);
       if (message.type === "RESYNC") {
-        this.send(ws, this.stateFor(attachment, null));
+        this.send(ws, this.stateFor(attachment, null, true));
         return;
       }
       if (attachment.role === "SPECTATOR") {
-        this.send(ws, { type: "REJECTED", actionId: message.type === "COMMAND" ? message.command.actionId : "lobby", reason: "SPECTATORS_CANNOT_ACT" });
+        const actionId = message.type === "COMMAND" ? message.command.actionId : "room";
+        this.send(ws, { type: "REJECTED", actionId, reason: "SPECTATORS_CANNOT_ACT" });
         return;
       }
-      const outcome = message.type === "LOBBY"
-        ? handleLobby(this.db, attachment.userId, message.action, this.deps())
+      if (message.type === "CHAT") {
+        const posted = postChat(this.db, attachment.userId, message.text, Date.now());
+        if (posted.kind === "POSTED") this.broadcastRaw({ type: "CHAT", message: posted.message });
+        else this.send(ws, { type: "REJECTED", actionId: "chat", reason: posted.reason });
+        return;
+      }
+      const outcome = message.type === "ROOM"
+        ? handleRoomAction(this.db, attachment.userId, message.action, this.deps())
         : handleCommand(this.db, attachment.userId, message.command, this.deps());
       await this.deliver(ws, attachment, outcome);
     } catch (error) {
@@ -133,17 +152,19 @@ export class GameRoom extends DurableObject<Env> {
   override async alarm(): Promise<void> {
     const events = runDueTimeouts(this.db, this.deps());
     for (const event of events) this.broadcast(event);
+    await this.deliverFinalizations();
     await this.scheduleAlarm();
   }
 
   private async deliver(ws: WebSocket, attachment: Attachment, outcome: RoomOutcome): Promise<void> {
     if (outcome.kind === "COMMITTED") {
       this.broadcast(outcome.event);
+      await this.deliverFinalizations();
       await this.scheduleAlarm();
       return;
     }
     if (outcome.kind === "DUPLICATE") {
-      this.send(ws, this.stateFor(attachment, null));
+      this.send(ws, this.stateFor(attachment, null, false));
       return;
     }
     this.send(ws, {
@@ -154,31 +175,52 @@ export class GameRoom extends DurableObject<Env> {
     });
   }
 
+  /** RT-012: best-effort delivery now; a failure keeps the row and the alarm retries it. */
+  private async deliverFinalizations(): Promise<void> {
+    for (const game of dueFinalizations(this.db, Date.now())) {
+      try {
+        await deliverFinalization(this.env.DB, game);
+        markFinalized(this.db, game.gameId);
+      } catch (error) {
+        console.error("finalization delivery failed", { gameId: game.gameId, error: String(error) });
+        markFinalizationFailed(this.db, game.gameId, Date.now());
+      }
+    }
+  }
+
   private async scheduleAlarm(): Promise<void> {
     const at = nextAlarmAt(this.db);
     if (at === null) await this.ctx.storage.deleteAlarm();
     else await this.ctx.storage.setAlarm(at);
   }
 
-  private stateFor(attachment: Attachment, event: GameplayEvent | null): ServerMessage {
+  private stateFor(attachment: Attachment, event: GameplayEvent | null, withChat: boolean): ServerMessage {
     const room = roomView(this.db, Date.now());
     if (room === null) return { type: "ERROR", code: "ROOM_TEMPORARILY_UNAVAILABLE" };
+    const view = viewerGame(this.db, attachment.role === "PLAYER" ? attachment.userId : null);
     return {
       type: "STATE",
       room,
-      game: viewerGame(this.db, attachment.role === "PLAYER" ? attachment.userId : null),
+      game: view?.game ?? null,
       you: { userId: attachment.userId, role: attachment.role },
       event,
+      stateHash: view?.hash ?? null,
+      chat: withChat ? recentChat(this.db) : null,
       serverTime: Date.now(),
     };
   }
 
   /** Committed-state fan-out: every socket gets its own projection, so private data stays private. */
-  private broadcast(event: GameplayEvent | null): void {
+  private broadcast(event: GameplayEvent | null, except?: WebSocket): void {
     for (const ws of this.ctx.getWebSockets()) {
+      if (ws === except) continue;
       const attachment = ws.deserializeAttachment() as Attachment | null;
-      if (attachment !== null) this.send(ws, this.stateFor(attachment, event));
+      if (attachment !== null) this.send(ws, this.stateFor(attachment, event, false));
     }
+  }
+
+  private broadcastRaw(message: ServerMessage): void {
+    for (const ws of this.ctx.getWebSockets()) this.send(ws, message);
   }
 
   private replaceStaleSockets(userId: string, currentEpoch: number, keep: WebSocket): void {

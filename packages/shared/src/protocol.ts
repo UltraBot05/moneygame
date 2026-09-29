@@ -6,7 +6,10 @@ import type {
 } from "@moneygame/game-core";
 
 /** Wire-protocol version. Bump when the client/worker contract changes. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
+
+/** Longest chat message, after trimming (RT-011). */
+export const MAX_CHAT_LENGTH = 280;
 
 /** Largest client message the room accepts, in UTF-16 code units (RT-002 / RT-015 bound). */
 export const MAX_CLIENT_MESSAGE_LENGTH = 16 * 1024;
@@ -42,16 +45,29 @@ export interface WireCommand {
   readonly payload: unknown;
 }
 
-export type LobbyAction =
+/** Room lifecycle actions: lobby (ready/leave/configure/start) and host controls (pause/resume/rematch). */
+export type RoomAction =
   | { readonly kind: "SET_READY"; readonly ready: boolean }
   | { readonly kind: "LEAVE" }
   | { readonly kind: "CONFIGURE"; readonly settings: RoomSettings }
-  | { readonly kind: "START" };
+  | { readonly kind: "START" }
+  | { readonly kind: "PAUSE" }
+  | { readonly kind: "RESUME" }
+  | { readonly kind: "REMATCH" };
 
 export type ClientMessage =
   | { readonly type: "COMMAND"; readonly command: WireCommand }
-  | { readonly type: "LOBBY"; readonly action: LobbyAction }
+  | { readonly type: "ROOM"; readonly action: RoomAction }
+  | { readonly type: "CHAT"; readonly text: string }
   | { readonly type: "RESYNC" };
+
+export interface ChatMessage {
+  readonly id: number;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly text: string;
+  readonly at: number;
+}
 
 export interface MemberView {
   readonly userId: string;
@@ -67,6 +83,8 @@ export interface RoomView {
   readonly roomCode: string;
   readonly hostUserId: string;
   readonly phase: "LOBBY" | "IN_GAME";
+  /** Host pause (RT-010): game commands and every clock are frozen. */
+  readonly paused: boolean;
   readonly settings: RoomSettings;
   readonly members: readonly MemberView[];
   /** Absolute server time the current turn auto-plays at, or null outside a turn. */
@@ -83,18 +101,23 @@ export type ServerMessage =
       readonly game: ProjectedGameState | null;
       readonly you: Readonly<{ userId: string; role: ViewerRole }>;
       readonly event: GameplayEvent | null;
+      /** Diagnostic FNV-1a hash of the canonical state at this gameVersion (RT-014/018). */
+      readonly stateHash: string | null;
+      /** Full recent chat on connect and resync; null when unchanged. */
+      readonly chat: readonly ChatMessage[] | null;
       readonly serverTime: number;
     }
+  | { readonly type: "CHAT"; readonly message: ChatMessage }
   | {
       readonly type: "REJECTED";
       readonly actionId: string;
-      readonly reason: GameplayRejectionReason | LobbyRejection;
+      readonly reason: GameplayRejectionReason | RoomRejection;
       readonly currentGameVersion?: number;
     }
   | { readonly type: "ERROR"; readonly code: ProtocolErrorCode }
   | { readonly type: "SESSION_REPLACED" };
 
-export type LobbyRejection =
+export type RoomRejection =
   | "NOT_HOST"
   | "NOT_IN_LOBBY"
   | "NOT_A_MEMBER"
@@ -103,7 +126,14 @@ export type LobbyRejection =
   | "SPECTATORS_CANNOT_ACT"
   | "SYSTEM_COMMAND"
   | "INVALID_SETTINGS"
-  | "MALFORMED_COMMAND";
+  | "MALFORMED_COMMAND"
+  | "ROOM_PAUSED"
+  | "NOT_PAUSED"
+  | "GAME_NOT_OVER"
+  | "RATE_LIMITED"
+  | "INVALID_CHAT"
+  | "ROOM_FULL"
+  | "NOT_IN_GAME";
 
 export type ProtocolErrorCode =
   | "MESSAGE_TOO_LARGE"
@@ -162,7 +192,7 @@ export function parseRoomSettings(value: unknown): RoomSettings {
   return { boardRef, startingCash: settings.startingCash as number, matchMode: settings.matchMode, teams, turnSeconds };
 }
 
-function parseLobbyAction(value: unknown): LobbyAction {
+function parseRoomAction(value: unknown): RoomAction {
   const action = object(value, "action");
   switch (action.kind) {
     case "SET_READY":
@@ -171,13 +201,16 @@ function parseLobbyAction(value: unknown): LobbyAction {
       return { kind: "SET_READY", ready: action.ready };
     case "LEAVE":
     case "START":
+    case "PAUSE":
+    case "RESUME":
+    case "REMATCH":
       exactKeys(action, ["kind"], [], "action");
       return { kind: action.kind };
     case "CONFIGURE":
       exactKeys(action, ["kind", "settings"], [], "action");
       return { kind: "CONFIGURE", settings: parseRoomSettings(action.settings) };
     default:
-      return malformed("unknown lobby action");
+      return malformed("unknown room action");
   }
 }
 
@@ -200,9 +233,13 @@ export function parseClientMessage(raw: string): ClientMessage {
     case "RESYNC":
       exactKeys(message, ["type"], [], "message");
       return { type: "RESYNC" };
-    case "LOBBY":
+    case "ROOM":
       exactKeys(message, ["type", "action"], [], "message");
-      return { type: "LOBBY", action: parseLobbyAction(message.action) };
+      return { type: "ROOM", action: parseRoomAction(message.action) };
+    case "CHAT":
+      exactKeys(message, ["type", "text"], [], "message");
+      if (typeof message.text !== "string") malformed("message.text must be a string");
+      return { type: "CHAT", text: message.text };
     case "COMMAND": {
       exactKeys(message, ["type", "command"], [], "message");
       const command = object(message.command, "command");
@@ -221,4 +258,24 @@ export function parseClientMessage(raw: string): ClientMessage {
     default:
       return malformed("unknown message type");
   }
+}
+
+/** Trimmed, printable, single-spaced chat text, or null when empty or too long (RT-011). */
+export function sanitizeChat(raw: string): string | null {
+  const printable = Array.from(raw).filter((char) => {
+    const point = char.codePointAt(0) ?? 0;
+    return point >= 0x20 && point !== 0x7f;
+  }).join("");
+  const text = printable.replace(/\s+/g, " ").trim();
+  return text === "" || Array.from(text).length > MAX_CHAT_LENGTH ? null : text;
+}
+
+/** 32-bit FNV-1a over a string: a cheap, deterministic diagnostic fingerprint (not security). */
+export function stateHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
 }
