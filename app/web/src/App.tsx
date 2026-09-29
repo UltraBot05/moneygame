@@ -1,109 +1,76 @@
-import { useEffect, useMemo, useState } from "react";
-import { PROTOCOL_VERSION } from "@moneygame/shared";
-import "./board/board.css";
-import { Board } from "./board/Board";
-import { GameRail } from "./board/Panels";
-import {
-  DEMO_SCENES,
-  DEMO_SCENE_LABELS,
-  demoBoard,
-  type DemoScene,
-} from "./board/fixtures";
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react";
+import { getMe, loginUrl, type Me } from "./api";
+import { GameScreen } from "./Game";
+import { Landing, Lobby, MessagePage } from "./Landing";
+import { browserDeps, RoomClient } from "./room-client";
+import "./styles.css";
 
-/**
- * SPIKE-006 renderer/demo only. Canonical money, ownership, and game state will
- * remain server-derived; every value on this page is deterministic synthetic data.
- */
-export function App() {
-  const [tileCount, setTileCount] = useState<40 | 52>(40);
-  const [stress, setStress] = useState(true);
-  const [scene, setScene] = useState<DemoScene>("turn");
-  const [selectedIndex, setSelectedIndex] = useState(4);
-  const board = useMemo(() => demoBoard(tileCount, { stress }), [tileCount, stress]);
-  const activeId = board.players[1]?.id ?? board.players[0]?.id ?? "";
-  const firstProperty = board.tiles.find((tile) => tile.type === "property");
-  const selectedTile =
-    board.tiles.find((tile) => tile.index === selectedIndex && tile.type === "property") ??
-    firstProperty;
-  const effectiveSelectedIndex = selectedTile?.index ?? 0;
+// Dev-only hot-seat preview; the DEV guard lets the production build drop it entirely.
+const DevPreview = import.meta.env.DEV ? lazy(() => import("./dev-preview").then((module) => ({ default: module.DevPreview }))) : null;
 
+/** Two routes: "/" (landing) and "/r/CODE" (a room). History API, no router dependency. */
+function usePath(): [string, (path: string) => void] {
+  const [path, setPath] = useState(() => location.pathname);
   useEffect(() => {
-    const cycleScene = (event: KeyboardEvent): void => {
-      if (event.altKey || event.ctrlKey || event.metaKey) return;
-      const tag = event.target instanceof HTMLElement ? event.target.tagName : "";
-      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      setScene((current) => {
-        const currentIndex = DEMO_SCENES.indexOf(current);
-        const delta = event.key === "ArrowRight" ? 1 : -1;
-        return DEMO_SCENES[(currentIndex + delta + DEMO_SCENES.length) % DEMO_SCENES.length] ?? current;
-      });
-    };
-    window.addEventListener("keydown", cycleScene);
-    return () => window.removeEventListener("keydown", cycleScene);
+    const onPop = () => setPath(location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
+  return [path, (next) => {
+    history.pushState(null, "", next);
+    setPath(next);
+  }];
+}
 
-  const selectTile = (index: number): void => {
-    const tile = board.tiles.find((candidate) => candidate.index === index);
-    setSelectedIndex(index);
-    if (tile?.type === "property") setScene("property");
-    else if (tile?.type === "surprise" || tile?.type === "chest") setScene("event");
-  };
-
+function RoomScreen({ code, me }: { code: string; me: Me }) {
+  const [client] = useState(() => new RoomClient(code, browserDeps()));
+  useEffect(() => {
+    client.start();
+    return () => client.stop();
+  }, [client]);
+  const snapshot = useSyncExternalStore(client.subscribe, client.getSnapshot);
+  const home = <a className="btn btn-paper" href="/" style={{ textDecoration: "none" }}>Home</a>;
+  if (snapshot.status === "REPLACED") {
+    return <MessagePage me={me} title="Opened somewhere else" body="This room is open in another tab or device with your account. Only one connection plays at a time."
+      actions={<><button type="button" className="btn btn-primary" onClick={() => client.retry()}>Play here instead</button>{home}</>} />;
+  }
+  if (snapshot.status === "UNREACHABLE") {
+    return <MessagePage me={me} title={"Can't open room " + code} body="The room may not exist, may be full, or the connection failed. Check the code with the host."
+      actions={<><button type="button" className="btn btn-primary" onClick={() => client.retry()}>Try again</button>{home}</>} />;
+  }
+  if (snapshot.room === null) {
+    return <MessagePage me={me} title={"Joining " + code} body="Connecting to the room…" actions={home} />;
+  }
   return (
-    <main className="stage">
-      <header className="masthead">
-        <div className="wordmark">
-          <span className="eyebrow">World Tour · Renderer Spike</span>
-          <h1>Money<span className="dot">·</span>Game</h1>
-          <span className="rule" aria-hidden="true" />
-        </div>
-        <div className="controls" aria-label="Renderer demo controls">
-          <div className="seg" role="group" aria-label="Board definition">
-            <button type="button" aria-pressed={tileCount === 40} onClick={() => setTileCount(40)}>
-              Standard · 40
-            </button>
-            <button type="button" aria-pressed={tileCount === 52} onClick={() => setTileCount(52)}>
-              Grand · 52
-            </button>
-          </div>
-          <label className="state-select">
-            <span>Demo state</span>
-            <select value={scene} onChange={(event) => setScene(event.target.value as DemoScene)}>
-              {DEMO_SCENES.map((option) => (
-                <option value={option} key={option}>{DEMO_SCENE_LABELS[option]}</option>
-              ))}
-            </select>
-          </label>
-          <label className="toggle" data-on={stress}>
-            <input type="checkbox" checked={stress} onChange={(event) => setStress(event.target.checked)} />
-            10-player stress
-          </label>
-          <span className="key-hint">← → states · protocol v{PROTOCOL_VERSION}</span>
-        </div>
-      </header>
-
-      <div className="layout" data-scene={scene}>
-        <div className="board-frame">
-          <Board
-            tileCount={tileCount}
-            board={board}
-            scene={scene}
-            selectedIndex={effectiveSelectedIndex}
-            onSelect={selectTile}
-            onCloseDetail={() => setScene("turn")}
-          />
-        </div>
-        <aside className="rail">
-          <GameRail
-            players={board.players}
-            activeId={activeId}
-            scene={scene}
-            selectedTile={selectedTile}
-          />
-        </aside>
-      </div>
-    </main>
+    <>
+      {snapshot.room.phase === "LOBBY" || snapshot.game === null
+        ? <Lobby snapshot={snapshot} client={client} me={me} />
+        : <GameScreen snapshot={snapshot} client={client} />}
+      {snapshot.status !== "OPEN" && <div className="banner" role="status" style={{ position: "fixed" }}>Reconnecting… your seat is held.</div>}
+    </>
   );
+}
+
+export function App() {
+  const [path, navigate] = usePath();
+  const [me, setMe] = useState<Me | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void getMe().then((user) => {
+      if (live) setMe(user);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (DevPreview !== null && path === "/dev/preview") return <Suspense fallback={null}><DevPreview /></Suspense>;
+  const room = path.match(/^\/r\/([A-Za-z0-9]{4,32})\/?$/);
+  if (room === null) return <Landing me={me} navigate={navigate} />;
+  const code = (room[1] as string).toUpperCase();
+  if (me === undefined) return <MessagePage me={me} title={"Room " + code} body="Checking your sign-in…" actions={null} />;
+  if (me === null) {
+    return <MessagePage me={me} title={"Join room " + code} body="Sign in with Google to take a seat. You come straight back to this room."
+      actions={<a className="btn btn-primary" href={loginUrl(code)} style={{ textDecoration: "none" }}>Sign in with Google</a>} />;
+  }
+  return <RoomScreen key={code} code={code} me={me} />;
 }

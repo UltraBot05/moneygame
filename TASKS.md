@@ -325,22 +325,24 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 
 | ID     | Status | Task                              | Depends                         | Acceptance                                                                    |
 | ------ | ------ | --------------------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
-| UI-001 | TODO   | design tokens + fidelity baseline | SPIKE-006                       | Claude Design is visual source of truth; no SPIKE-006 demo-shell drift        |
-| UI-002 | TODO   | landing/auth/lobby/settings shell | AUTH-001,RT-001,RULE-020,UI-001 | landing/create/join/auth/lobby/settings; only supported settings shown        |
-| UI-003 | TODO   | Standard board                    | UI-001,014,SPIKE-006            | responsive/custom production board; canonical 40-tile data                    |
-| UI-004 | TODO   | 3–6 HUD                          | UI-003,014                      | long names/balances/states; no document-level desktop scroll                  |
-| UI-005 | TODO   | turn/dice/action tray             | UI-003,014,RULE-007,013         | server-derived legal/pending/committed/disabled states                        |
-| UI-006 | TODO   | property/build/mortgage           | RULE-007,UI-003,014             | deed panel + legal/disabled clarity                                           |
-| UI-007 | TODO   | auction UI                        | RULE-005,RT-007,UI-014          | 10 bidders usable; authoritative countdown/state                              |
-| UI-008 | TODO   | trade UI                          | RULE-014,UI-014                 | large trade usable; stale/invalid acceptance states clear                     |
-| UI-009 | TODO   | card/tax/detention UI             | RULE-008,012,013,UI-014         | clear deterministic resolution/pending states                                 |
-| UI-010 | TODO   | debt/bankruptcy UI                | RULE-015,016,017,UI-014         | understandable liquidation/creditor/deadline state                            |
-| UI-011 | TODO   | reconnect/replaced UI             | RT-008,UI-014                   | no raw socket errors; grace/replaced/expired states                           |
-| UI-012 | TODO   | game end/rematch                  | RULE-019,RT-012,013,UI-014      | immutable result; fresh gameId; no stale old-game actions                     |
-| UI-013 | TODO   | mobile/reduced-motion pass        | UI-002..012,014                 | critical flow works; reduced-motion and mobile/tablet layouts                 |
-| UI-014 | TODO   | live authoritative game client    | RT-002,003,005,014              | one server-derived state source; retry reuses actionId; stale updates ignored |
-| UI-015 | TODO   | room/social/game-log controls     | RT-009,010,011,014,018,RULE-020 | live chat/log; pause/host/settings; team/FFA states                           |
-| UI-016 | TODO   | Collusion Guard UX                | INT-001,002,RT-017,UI-014       | server-driven warning/watch/removal/clawback/report states only               |
+| UI-001 | DONE   | design tokens + fidelity baseline | SPIKE-006                       | Claude Design is visual source of truth; no SPIKE-006 demo-shell drift        |
+| UI-002 | DONE   | landing/auth/lobby/settings shell | AUTH-001,RT-001,RULE-020,UI-001 | landing/create/join/auth/lobby/settings; only supported settings shown        |
+| UI-003 | DONE   | Standard board                    | UI-001,014,SPIKE-006            | responsive/custom production board; canonical 40-tile data                    |
+| UI-004 | DONE   | 3–6 HUD                          | UI-003,014                      | long names/balances/states; no document-level desktop scroll                  |
+| UI-005 | DONE   | turn/dice/action tray             | UI-003,014,RULE-007,013         | server-derived legal/pending/committed/disabled states                        |
+| UI-006 | DONE   | property/build/mortgage           | RULE-007,UI-003,014             | deed panel + legal/disabled clarity                                           |
+| UI-007 | DONE   | auction UI                        | RULE-005,RT-007,UI-014          | 10 bidders usable; authoritative countdown/state                              |
+| UI-008 | DONE   | trade UI                          | RULE-014,UI-014                 | large trade usable; stale/invalid acceptance states clear                     |
+| UI-009 | DONE   | card/tax/detention UI             | RULE-008,012,013,UI-014         | clear deterministic resolution/pending states                                 |
+| UI-010 | DONE   | debt/bankruptcy UI                | RULE-015,016,017,UI-014         | understandable liquidation/creditor/deadline state                            |
+| UI-011 | DONE   | reconnect/replaced UI             | RT-008,UI-014                   | no raw socket errors; grace/replaced/expired states                           |
+| UI-012 | DONE   | game end/rematch                  | RULE-019,RT-012,013,UI-014      | immutable result; fresh gameId; no stale old-game actions                     |
+| UI-013 | DONE   | mobile/reduced-motion pass        | UI-002..012,014                 | critical flow works; reduced-motion and mobile/tablet layouts                 |
+| UI-014 | DONE   | live authoritative game client    | RT-002,003,005,014              | one server-derived state source; retry reuses actionId; stale updates ignored |
+| UI-015 | DONE   | room/social/game-log controls     | RT-009,010,011,014,018,RULE-020 | live chat/log; pause/host/settings; team/FFA states                           |
+| UI-016 | DONE   | Collusion Guard UX                | INT-001,002,RT-017,UI-014       | server-driven warning/watch/removal/clawback/report states only               |
+
+**F review (2026-09-29):** UI-001..016 implemented per `docs/architecture/UI-F.md` from the Claude Design files (tokens, landing/lobby with only supported settings, size-agnostic board, turn/dice tray, deed panel with legal/disabled reasons, auction stage, two-column trade with deal tray and stale-offer state, card reveal, Holding strip, debt/bankruptcy rail, reconnect/replaced/unreachable pages, final standings + rematch, mobile/tablet and reduced motion, chat/log/pause, server-driven fair-play notices). Live client tested for version ordering and actionId-preserving retry; Playwright smoke checks both boards with no desktop page scroll at 1920x1080 and 1440x900. Self-reviewed; human visual sign-off against Design and full client-server browser E2E remain with QA-012.
 
 ---
 
