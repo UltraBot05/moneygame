@@ -4,6 +4,7 @@
  */
 
 export * from "./board";
+export * from "./advanced-rules";
 export * from "./cards";
 export * from "./command";
 export * from "./dice";

@@ -29,7 +29,7 @@ The default $2,000 economy is the primary validated launch target. The $1,500 an
 The following are not frozen by implication:
 
 - final Surprise and Treasure content (RULE-011/012);
-- full Holding choices, attempts, and held release cards (RULE-013);
+- ~~full Holding choices, attempts, and held release cards (RULE-013)~~ — decided in section 9, pending RULE-013 review;
 - human validation of two-development-per-turn snowball dynamics;
 - Grand human playtesting and human comparison of optional pacing ideas;
 - Collusion Guard backend detection, bailout, or enforcement rules;
@@ -156,3 +156,42 @@ FREEZE does not mean no decision can ever change. A future change to a frozen in
 5. independent review before acceptance.
 
 Builders stop and mark the task blocked if implementation would silently violate this baseline. Deferred work exits its own task only when its acceptance criteria and required reruns are satisfied; it does not become frozen merely because implementation has started.
+
+## 9. Amendment — D2 product decisions (2026-09-29)
+
+Decided by the product owner during Section D Pass D2 (RULE-009, 010, 013, 014, 015). They follow the section 8 process and become accepted once those tasks pass independent review. Final card content (RULE-011/012) stays deferred.
+
+### Holding (RULE-013)
+
+- **Entry:** landing on GO TO HOLDING, a card effect, or a third consecutive double. The third double does not move the player. The player goes to the Holding tile with no Start salary, and any doubles continuation ends. Landing on the Holding tile by movement is only visiting.
+- **Holding turn, before rolling:** the player may pay the $50 release fee or use a held release card. Either way they then roll and move normally.
+- **Holding turn, rolling instead:** the roll is a release attempt.
+  - Doubles release the player, who moves by that roll with no extra roll.
+  - A failed attempt keeps the player held.
+  - After the third failed attempt the player must pay $50 and then moves by that roll. If they can't cover the fee it becomes a bank obligation, and settling it releases them and moves them by the stored roll.
+- **While held:** the player still collects rent and may trade, mortgage, and sell development. They may not develop.
+- **Release cards:** a used release card is consumed once and returns to its own deck's discard pile.
+
+### Card effects (RULE-010)
+
+- Movement, draws, and Holding entry must be the last step of any effect sequence (validated at catalog load).
+- Card movement resolves its destination exactly like a dice landing: buy decision or auction, rent (utility rent uses the turn's roll), tax, GO TO HOLDING, or an in-chain draw on a card tile. That draw shares the same 16-step budget.
+- Only the current player may be charged by an effect, because obligations have a single debtor. Other players may only receive bank cash.
+
+### Trade and debt (RULE-014, RULE-015)
+
+- Trades exchange cash and ownable assets only; held cards are not tradable.
+- **Blocked trades:**
+  - any trade during an auction;
+  - assets in a set with development;
+  - the asset that is the source of the pending resolution.
+- **Mortgaged assets** transfer still mortgaged, with no transfer fee.
+- **Acceptance** always revalidates against current state.
+- **Debt:** the CORE-011 obligation is the only debt truth. The runtime supplies an absolute deadline for every new obligation.
+- **Liquidation while in debt:**
+  - The debtor may only mortgage, sell development (even-sell, canonical 50% sell-back), or make liquidation trades created during that debt.
+  - Open trades from before the debt that involve the debtor cannot be accepted while it is outstanding.
+  - The obligation is paid automatically as soon as the debtor's cash covers it, and play resumes where it was interrupted (including a suspended card effect).
+- **Deadline expiry** only marks a bankruptcy handoff. The asset/cash transfer belongs to RULE-016/017.
+
+These rules change cash flow compared with the ECON-001 bot's Holding approximation. The economy matrix must be rerun before final balance approval (GRAND-003/QA-015).

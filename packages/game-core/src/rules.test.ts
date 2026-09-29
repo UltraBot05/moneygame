@@ -41,6 +41,7 @@ function context(
     rng: () => values[index++] ?? 0,
     currentTime: 1000,
     auctionDecisionDeadlineAt: 2000,
+    debtDeadlineAt: 3000,
     ...(appliedActions === undefined ? {} : { appliedActions }),
   };
 }
@@ -89,6 +90,7 @@ function configuredState(input: Readonly<{
       ...player,
       cash: input.cash?.[player.userId] ?? player.cash,
       inHolding: input.holding?.includes(player.userId) ?? player.inHolding,
+      position: input.holding?.includes(player.userId) ? 10 : player.position,
     })),
     assets: state.assets.map((asset) => ({
       ...asset,

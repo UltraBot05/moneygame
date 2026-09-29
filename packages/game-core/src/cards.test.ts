@@ -14,7 +14,7 @@ function catalog() {
   return {
     decks: [
       { deckId: "surprise", cardIds: ["surprise:advance"] },
-      { deckId: "treasure", cardIds: ["treasure:release"] },
+      { deckId: "treasure", cardIds: ["treasure:release", "treasure:cash"] },
     ],
     cards: [
       {
@@ -29,12 +29,18 @@ function catalog() {
         effectId: "effect:release",
         heldCapability: "DETENTION_RELEASE",
       },
+      {
+        cardId: "treasure:cash",
+        deckId: "treasure",
+        effectId: "effect:cash",
+        heldCapability: null,
+      },
     ],
     effects: [
       {
         effectId: "effect:advance",
         type: "SEQUENCE",
-        effectIds: ["effect:move", "effect:cash"],
+        effectIds: ["effect:cash", "effect:move"],
       },
       { effectId: "effect:move", type: "MOVE_TO_TILE", tileIndex: 0, collectStart: true },
       {
@@ -59,7 +65,7 @@ describe("CORE-013 declarative card/effect schema", () => {
     expect(parsed.effects[0]).toMatchObject({
       effectId: "effect:advance",
       type: "SEQUENCE",
-      effectIds: ["effect:move", "effect:cash"],
+      effectIds: ["effect:cash", "effect:move"],
     });
     expect(Object.isFrozen(parsed)).toBe(true);
     expect(Object.isFrozen(parsed.decks[0]?.cardIds)).toBe(true);
@@ -131,6 +137,7 @@ describe("CORE-013 declarative card/effect schema", () => {
       { effectId: "effect:advance", type: "SEQUENCE", effectIds: ["effect:cycle"] },
       { effectId: "effect:cycle", type: "SEQUENCE", effectIds: ["effect:advance"] },
       { effectId: "effect:release", type: "ENTER_DETENTION" },
+      { effectId: "effect:cash", type: "ADJUST_CASH", target: "CURRENT_PLAYER", amount: 100 },
     ];
     expect(() => parseCardCatalog(cyclic, board)).toThrow(/static effect reference cycle/);
   });

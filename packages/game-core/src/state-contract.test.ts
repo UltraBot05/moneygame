@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import grandFixture from "../../../boards/world-tour/grand.json";
 import standardFixture from "../../../boards/world-tour/standard.json";
 import { parseBoardDefinition, type BoardDefinition } from "./board";
+import { parseCardCatalog } from "./cards";
 import { applyGameplayCommand } from "./gameplay";
 import {
   assertPendingDecisionOwner,
@@ -70,12 +71,91 @@ function ownedRentState() {
   }, standard);
 }
 
+/** Obligations always carry runtime deadline metadata in canonical state. */
 function withPending(
   board: BoardDefinition,
   pending: PendingResolution,
   state: GameState = landed(board, 1),
 ) {
-  return parseGameState({ ...state, pendingResolution: pending }, board);
+  const debt = pending.obligation === null
+    ? null
+    : { resolutionId: pending.resolutionId, deadlineAt: 5000, bankruptcyRequired: false };
+  return parseGameState(
+    { ...state, pendingResolution: pending, ruleState: { ...state.ruleState, debt } },
+    board,
+  );
+}
+
+const contractCatalog = parseCardCatalog({
+  decks: [
+    { deckId: "surprise", cardIds: ["surprise-1"] },
+    { deckId: "treasure", cardIds: ["treasure-1"] },
+  ],
+  cards: [
+    { cardId: "surprise-1", deckId: "surprise", effectId: "card-effect-1", heldCapability: null },
+    { cardId: "treasure-1", deckId: "treasure", effectId: "card-effect-1", heldCapability: null },
+  ],
+  effects: [
+    { effectId: "card-effect-1", type: "ADJUST_CASH", target: "CURRENT_PLAYER", amount: -3000 },
+  ],
+}, standard);
+
+/** A card-origin debt as the effect engine persists it: pending obligation + continuation. */
+function suspendedCardDebt(card: GameState, pending: PendingResolution): GameState {
+  return parseGameState({
+    ...card,
+    pendingResolution: pending,
+    ruleState: {
+      ...card.ruleState,
+      decks: [
+        { deckId: "surprise", drawPile: ["surprise-1"], discardPile: [] },
+        { deckId: "treasure", drawPile: [], discardPile: ["treasure-1"] },
+      ],
+      effectContinuation: {
+        resolutionId: pending.resolutionId,
+        actorUserId: pending.actorUserId,
+        originTileIndex: 9,
+        remainingSteps: 14,
+        frames: [],
+        roll: card.pendingResolution!.roll,
+      },
+      debt: { resolutionId: pending.resolutionId, deadlineAt: 5000, bankruptcyRequired: false },
+    },
+  }, standard, contractCatalog);
+}
+
+const heldRoll = {
+  dice: [1, 2], total: 3, doubles: false, consecutiveDoubles: 0, isThirdConsecutiveDouble: false,
+} as const;
+
+/** The active player after a third failed Holding attempt they cannot pay for. */
+function holdingFeeDue(state: GameState): GameState {
+  return parseGameState({
+    ...state,
+    turn: { ...state.turn!, hasRolled: true, rollAgain: false, consecutiveDoubles: 0, rollFromHolding: true },
+    players: state.players.map((player, index) => index === 0
+      ? { ...player, position: 10, inHolding: true, holdingAttempts: 2, cash: 10 }
+      : player),
+    pendingResolution: {
+      resolutionId: "turn-1:holding-fee",
+      kind: "DETENTION_FEE",
+      actorUserId: players[0],
+      decisionOwnerUserId: players[0],
+      source: { type: "TILE", tileIndex: 10 },
+      continuation: { type: "END_TURN" },
+      roll: heldRoll,
+      obligation: {
+        debtorUserId: players[0],
+        creditor: { type: "BANK" },
+        amount: 50,
+        continuation: { type: "END_TURN" },
+      },
+    },
+    ruleState: {
+      ...state.ruleState,
+      debt: { resolutionId: "turn-1:holding-fee", deadlineAt: 5000, bankruptcyRequired: false },
+    },
+  }, standard);
 }
 
 describe("CORE-010 all-ownable canonical asset state", () => {
@@ -345,7 +425,7 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
 
   it("parses and reconstructs DEBT with a valid persisted obligation", () => {
     const card = landed(standard, 9);
-    const debt = withPending(standard, {
+    const debt = suspendedCardDebt(card, {
       ...card.pendingResolution!,
       kind: "DEBT",
       source: { type: "EFFECT", effectId: "card-effect-1", originTileIndex: 9 },
@@ -357,9 +437,14 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
         amount: 3000,
         continuation: { type: "RESUME_EFFECT", effectId: "card-effect-1" },
       },
-    }, card);
+    });
 
-    expect(parseGameState(JSON.parse(JSON.stringify(debt)), standard)).toEqual(debt);
+    expect(parseGameState(JSON.parse(JSON.stringify(debt)), standard, contractCatalog)).toEqual(debt);
+    expect(() => parseGameState(JSON.parse(JSON.stringify(debt)), standard))
+      .toThrow(/card catalog is required/);
+    expect(() => parseGameState({
+      ...debt, ruleState: { ...debt.ruleState, effectContinuation: null },
+    }, standard, contractCatalog)).toThrow(/suspended effect/);
   });
 
   it("continues to reject invalid DEBT creditors and amounts", () => {
@@ -427,7 +512,7 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
     ).kind).toBe("AUCTION");
 
     const card = landed(standard, 9);
-    const debt = withPending(standard, {
+    const debt = suspendedCardDebt(card, {
       ...card.pendingResolution!,
       kind: "DEBT",
       source: { type: "EFFECT", effectId: "card-effect-1", originTileIndex: 9 },
@@ -439,32 +524,27 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
         amount: 3000,
         continuation: { type: "RESUME_EFFECT", effectId: "card-effect-1" },
       },
-    }, card);
-    expect(parseGameState(JSON.parse(JSON.stringify(debt)), standard)).toEqual(debt);
+    });
+    expect(parseGameState(JSON.parse(JSON.stringify(debt)), standard, contractCatalog)).toEqual(debt);
     expect(() => withPending(standard, {
       ...debt.pendingResolution!,
       source: { type: "EFFECT", effectId: "bad", originTileIndex: 1 },
     }, card)).toThrow(/originTileIndex/);
 
-    const corner = landed(standard, 10);
-    const detentionFee = withPending(standard, {
-      resolutionId: "turn-1:detention-fee",
-      kind: "DETENTION_FEE",
-      actorUserId: players[0]!,
-      decisionOwnerUserId: players[0]!,
-      source: { type: "TILE", tileIndex: 10 },
-      continuation: { type: "END_TURN" },
-      roll: null,
-      obligation: {
-        debtorUserId: players[0]!,
-        creditor: { type: "BANK" },
-        amount: 50,
-        continuation: { type: "END_TURN" },
-      },
-    }, corner);
+    const detentionFee = holdingFeeDue(started(standard));
     expect(parseGameState(JSON.parse(JSON.stringify(detentionFee)), standard)).toEqual(
       detentionFee,
     );
+    expect(() => parseGameState({
+      ...detentionFee,
+      players: detentionFee.players.map((player, index) => index === 0
+        ? { ...player, inHolding: false, holdingAttempts: 0 }
+        : player),
+    }, standard)).toThrow(/Holding fee/);
+    expect(() => parseGameState({
+      ...detentionFee,
+      pendingResolution: { ...detentionFee.pendingResolution!, roll: null },
+    }, standard)).toThrow(/release roll/);
   });
 
   it("preserves duplicate and stale decisions ahead of pending command blocking", () => {
@@ -489,29 +569,8 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
       kind: "DUPLICATE_ACTION", committedGameVersion: state.gameVersion,
     });
   });
-  it("blocks a new roll even when the unresolved action precedes the first roll", () => {
-    const active = started(standard);
-    const pending = parseGameState({
-      ...active,
-      players: active.players.map((player, index) => index === 0
-        ? { ...player, position: 10 }
-        : player),
-      pendingResolution: {
-        resolutionId: "turn-1:fee",
-        kind: "DETENTION_FEE",
-        actorUserId: players[0],
-        decisionOwnerUserId: players[0],
-        source: { type: "TILE", tileIndex: 10 },
-        continuation: { type: "END_TURN" },
-        roll: null,
-        obligation: {
-          debtorUserId: players[0],
-          creditor: { type: "BANK" },
-          amount: 50,
-          continuation: { type: "END_TURN" },
-        },
-      },
-    }, standard);
+  it("blocks a new roll while an unpaid Holding fee is pending", () => {
+    const pending = holdingFeeDue(started(standard));
     let rngCalls = 0;
     const rejected = applyGameplayCommand(
       pending,

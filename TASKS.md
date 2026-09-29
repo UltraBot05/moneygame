@@ -255,18 +255,20 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 | RULE-006 | DONE   | buildings/even-build              | RULE-002,CORE-011          | even-build; max 2 paid development actions/turn; no carryover                      |
 | RULE-007 | DONE   | mortgage/unmortgage               | RULE-006,CORE-010          | 50% principal; canonical +10% redemption; zero rent while mortgaged                |
 | RULE-008 | DONE   | tax                               | CORE-009,011               | fixed/percent/choice framework; canonical fixed tax preserved                      |
-| RULE-009 | TODO   | deck/held-card engine             | CORE-003,009,013           | deterministic draw/shuffle/reshuffle; held-card invariant                          |
-| RULE-010 | TODO   | effect primitives/16-step breaker | RULE-009,CORE-011          | nested effects deterministic; shared 16-step budget; cycle-safe diagnostic failure |
-| RULE-011 | TODO   | Surprise v1                       | RULE-010                   | effects defined by board/card data only; no duplicated hardcoded deck              |
-| RULE-012 | TODO   | Treasure Chest v1                 | RULE-010                   | effects defined by board/card data only; held/multi-player effects deterministic   |
-| RULE-013 | TODO   | detention                         | RULE-010,CORE-012          | entry/release paths; doubles integration; attempts/held-card/fee state             |
-| RULE-014 | TODO   | trade                             | RULE-001,007,020           | atomic stale revalidation; full offer lifecycle; mode/integrity hooks              |
-| RULE-015 | TODO   | debt/liquidation                  | CORE-011,RULE-007,014      | explicit creditor/amount/deadline/continuation; only legal liquidation actions     |
+| RULE-009 | DONE                 | deck/held-card engine             | CORE-003,009,013           | deterministic draw/shuffle/reshuffle; held-card invariant                          |
+| RULE-010 | DONE                 | effect primitives/16-step breaker | RULE-009,CORE-011          | nested effects deterministic; shared 16-step budget; cycle-safe diagnostic failure |
+| RULE-011 | ARCHITECTURE_BLOCKED | Surprise v1                       | RULE-010                   | effects defined by board/card data only; no duplicated hardcoded deck              |
+| RULE-012 | ARCHITECTURE_BLOCKED | Treasure Chest v1                 | RULE-010                   | effects defined by board/card data only; held/multi-player effects deterministic   |
+| RULE-013 | DONE                 | detention                         | RULE-010,CORE-012          | entry/release paths; doubles integration; attempts/held-card/fee state             |
+| RULE-014 | DONE                 | trade                             | RULE-001,007,020           | atomic stale revalidation; full offer lifecycle; mode/integrity hooks              |
+| RULE-015 | DONE                 | debt/liquidation                  | CORE-011,RULE-007,014      | explicit creditor/amount/deadline/continuation; only legal liquidation actions     |
 | RULE-016 | TODO   | bankruptcy to player              | RULE-015                   | deterministic atomic cash/assets/cards transfer; pending interactions invalidated  |
 | RULE-017 | TODO   | bankruptcy to bank                | RULE-015,005               | deterministic reset/auction queue; no duplicate auctions                           |
 | RULE-018 | TODO   | teams baseline                    | RULE-002,014,016,017,020   | explicit allied ownership/rent/trade/debt/elimination semantics                    |
 | RULE-019 | TODO   | win conditions                    | RULE-016,017,018,020       | last-standing + time/round; deterministic tie-break; immutable final summary       |
 | RULE-020 | DONE   | match mode/settings contract      | CORE-002,FREEZE-001        | immutable FFA/teams + win mode; only approved settings; no Design-only toggles     |
+
+**D2 review (2026-09-29):** RULE-009/010/013/014/015 implemented against the product decisions in `docs/architecture/ARCHITECTURE-FREEZE-v1.md` §9 and approved after an adversarial review pass (fixes: every deck must keep a non-holdable card; trade close refused outside ACTIVE_TURN). RULE-011/012 remain ARCHITECTURE_BLOCKED on canonical card content.
 
 ## Game integrity / anti-collusion
 
@@ -404,7 +406,8 @@ Every module must test interactions with all already-shipped systems it touches.
 ## Separate product follow-ups
 
 - RULE-011/012: finalize card content independently of visual placeholder values; rerun production/final economy simulation after changed effects or values.
-- RULE-013: full Holding choices/attempts and held release cards must replace the economy bot's pay-on-skipped-turn approximation before final balance approval.
+- RULE-013: Holding flow decided and implemented (ARCHITECTURE-FREEZE-v1 §9); the economy matrix must be rerun with it, replacing the bot's pay-on-skipped-turn approximation, before final balance approval.
+- RULE-011/012 (ARCHITECTURE_BLOCKED): no tracked canonical deck exists. Next: draft a schema-mapped v1 deck from the private Design placeholders for product-owner approval, extending effect primitives where required.
 - GRAND-005/008: human playtest frozen Grand A/core; optional B/C pacing candidates remain non-v1 unless evidence justifies selection.
 - INT-001/002 + RT-017 + UI-016 + QA-013: Collusion Guard is the explicit FFA anti-collusion/integrity track. Private Design behavior is not production policy until INT-001 is approved.
 - Claude Design remains the visual UX source of truth for Section F/G production UI. The existing SPIKE-006 React shell is implementation evidence, not the visual target.
