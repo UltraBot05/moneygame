@@ -6,7 +6,7 @@ import type {
 } from "@moneygame/game-core";
 
 /** Wire-protocol version. Bump when the client/worker contract changes. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Longest chat message, after trimming (RT-011). */
 export const MAX_CHAT_LENGTH = 280;
@@ -77,6 +77,8 @@ export interface MemberView {
   readonly connected: boolean;
   /** Reconnect lease expired; turns are being auto-played until an explicit rejoin. */
   readonly away: boolean;
+  /** Equipped cosmetic token ring colour (looks only), or null. */
+  readonly ring: string | null;
 }
 
 export interface RoomView {

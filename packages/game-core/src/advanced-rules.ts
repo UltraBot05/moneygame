@@ -724,6 +724,8 @@ export type EffectRunResult =
       readonly ruleState: AdvancedRuleState;
       readonly terminal: EffectTerminal | null;
       readonly drawnCardIds: readonly string[];
+      /** Start salary the actor collected from card movement during this run. */
+      readonly startAward: number;
     }
   | {
       readonly kind: "SUSPENDED";
@@ -735,6 +737,7 @@ export type EffectRunResult =
       readonly frames: readonly EffectFrame[];
       readonly remainingSteps: number;
       readonly drawnCardIds: readonly string[];
+      readonly startAward: number;
     }
   | { readonly kind: "FAILED"; readonly diagnostic: EffectDiagnostic };
 
@@ -767,6 +770,7 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
   let ruleState = input.ruleState;
   let remainingSteps = input.remainingSteps;
   const drawnCardIds: string[] = [];
+  let startAwarded = 0;
   const actor = (): PlayerState => {
     const found = players.find((candidate) => candidate.userId === input.actorUserId);
     if (found === undefined) throw new RangeError("effect actor is not a game player");
@@ -788,7 +792,7 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
       }),
     });
   const completed = (terminal: EffectTerminal | null): EffectRunResult =>
-    Object.freeze({ kind: "COMPLETED", players, ruleState, terminal, drawnCardIds: Object.freeze(drawnCardIds) });
+    Object.freeze({ kind: "COMPLETED", players, ruleState, terminal, drawnCardIds: Object.freeze(drawnCardIds), startAward: startAwarded });
   const suspend = (
     effectId: string,
     amount: number,
@@ -803,6 +807,7 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
     frames: Object.freeze(frames.slice()),
     remainingSteps,
     drawnCardIds: Object.freeze(drawnCardIds),
+    startAward: startAwarded,
   });
   const draw = (deck: CardDeck): void => {
     const drawn = drawCard(ruleState, input.catalog, deck, input.actorUserId, input.rng);
@@ -817,6 +822,7 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
     rent: LandingRent = "STANDARD",
   ): EffectRunResult | null => {
     updateActor({ position: to, cash: checkedCash(actor().cash + startAward) });
+    startAwarded += startAward;
     const tile = input.board.economyProfile.tiles[to];
     if (tile?.type === "card") {
       frames.push({ type: "DRAW_CARD", deckId: tile.deck });

@@ -160,6 +160,8 @@ export type GameplayEvent =
       readonly playerId: string;
       readonly drawnCardIds: readonly string[];
       readonly outcome: "COMPLETED" | "SUSPENDED";
+      /** Start salary collected by card movement in this resolution. */
+      readonly startAward: number;
     }
   | {
       readonly type: "HOLDING_RELEASED";
@@ -604,6 +606,7 @@ type EffectApplication =
       readonly draft: Draft;
       readonly outcome: "COMPLETED" | "SUSPENDED";
       readonly drawnCardIds: readonly string[];
+      readonly startAward: number;
     }
   | { readonly kind: "FAILED"; readonly diagnostic: EffectDiagnostic };
 
@@ -637,6 +640,7 @@ function runEffects(
       kind: "APPLIED",
       outcome: "SUSPENDED",
       drawnCardIds: run.drawnCardIds,
+      startAward: run.startAward,
       draft: {
         ...draft,
         players: run.players,
@@ -679,7 +683,7 @@ function runEffects(
   else if (run.terminal?.type === "LAND") {
     next = resolveLanding(state, env, next, actorUserId, roll, run.terminal.rent).draft;
   }
-  return { kind: "APPLIED", outcome: "COMPLETED", drawnCardIds: run.drawnCardIds, draft: next };
+  return { kind: "APPLIED", outcome: "COMPLETED", drawnCardIds: run.drawnCardIds, startAward: run.startAward, draft: next };
 }
 
 type Settlement =
@@ -965,6 +969,7 @@ function drawPendingCard(state: GameState, env: RuleEnv): GameplayCommandResult 
     playerId: env.actorUserId,
     drawnCardIds: applied.drawnCardIds,
     outcome: applied.outcome,
+    startAward: applied.startAward,
   });
 }
 

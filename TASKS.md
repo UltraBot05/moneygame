@@ -350,15 +350,17 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 
 | ID        | Status | Task                              | Depends                         | Acceptance                                                            |
 | --------- | ------ | --------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
-| GRAND-001 | TODO   | Grand canonical production parity | CORE-010                        | existing frozen 52/12/30 definition integrates without reauthoring    |
-| GRAND-002 | TODO   | 6–10 HUD/renderer                | UI-003,004,014,GRAND-001        | 10-player pathological cases; dense 2-line tile treatment             |
-| GRAND-003 | TODO   | Grand economy production parity   | ECON-001,RULE-007,013,GRAND-001 | production rules reproduce frozen A/core economy; no silent rebalance |
-| GRAND-004 | TODO   | production simulation 6/7/8/9/10  | GRAND-003                       | distributions recorded from production rule path                      |
+| GRAND-001 | DONE   | Grand canonical production parity | CORE-010                        | existing frozen 52/12/30 definition integrates without reauthoring    |
+| GRAND-002 | DONE   | 6–10 HUD/renderer                | UI-003,004,014,GRAND-001        | 10-player pathological cases; dense 2-line tile treatment             |
+| GRAND-003 | DONE   | Grand economy production parity   | ECON-001,RULE-007,013,GRAND-001 | production rules reproduce frozen A/core economy; no silent rebalance |
+| GRAND-004 | DONE   | production simulation 6/7/8/9/10  | GRAND-003                       | distributions recorded from production rule path                      |
 | GRAND-005 | TODO   | human alpha core                  | GRAND-002,004,UI-013            | structured gameplay/UX feedback on playable Grand                     |
 | GRAND-006 | TODO   | optional Turbo candidate          | GRAND-005                       | isolated tested module; not v1-required                               |
 | GRAND-007 | TODO   | optional Transit candidate        | GRAND-005                       | isolated tested module; not v1-required                               |
 | GRAND-008 | TODO   | optional A/B/C compare            | GRAND-006,007                   | simulation+humans; selecting none remains valid                       |
 | GRAND-009 | TODO   | optional selected pacing behavior | GRAND-008                       | only implemented if evidence beats frozen A/core                      |
+
+**G review (2026-09-29):** GRAND-001..004 per `docs/architecture/GRAND-G.md`: Grand runs on the shared production path (parity tests pin structure and neutral specials); the 10-player HUD/board shipped with F; the production-path simulator reproduces the frozen A/core economy at 250 seeds per configuration, 9/9 inside the unchanged SPIKE-008 bands (`PRODUCTION-SIMULATION.json`). GRAND-005 is a human alpha gate: protocol prepared, not run. GRAND-006..009 stay optional and unimplemented (frozen decision: Grand A).
 
 ---
 
@@ -366,13 +368,15 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 
 | ID       | Status | Task                       | Depends         | Acceptance                                                          |
 | -------- | ------ | -------------------------- | --------------- | ------------------------------------------------------------------- |
-| META-001 | TODO   | profile service/read model | DATA-001,RT-012 | stable profile load from internal userId; retry/error safe          |
-| META-002 | TODO   | XP/level                   | META-001,RT-012 | server-finalized; duplicate/retry safe; test/sandbox games excluded |
-| META-003 | TODO   | coins                      | META-001,RT-012 | cosmetics only; duplicate/retry safe; test/sandbox games excluded   |
-| META-004 | TODO   | history                    | META-001,RT-012 | idempotent finalized-game record                                    |
-| META-005 | TODO   | achievements               | META-002,004    | server-derived only; duplicate-safe                                 |
-| META-006 | TODO   | cosmetic inventory         | META-003        | no gameplay advantage; server-authoritative ownership               |
-| META-007 | TODO   | profile UI                 | META-001..006   | loading/error/empty states; no client-authored progression          |
+| META-001 | DONE   | profile service/read model | DATA-001,RT-012 | stable profile load from internal userId; retry/error safe          |
+| META-002 | DONE   | XP/level                   | META-001,RT-012 | server-finalized; duplicate/retry safe; test/sandbox games excluded |
+| META-003 | DONE   | coins                      | META-001,RT-012 | cosmetics only; duplicate/retry safe; test/sandbox games excluded   |
+| META-004 | DONE   | history                    | META-001,RT-012 | idempotent finalized-game record                                    |
+| META-005 | DONE   | achievements               | META-002,004    | server-derived only; duplicate-safe                                 |
+| META-006 | DONE   | cosmetic inventory         | META-003        | no gameplay advantage; server-authoritative ownership               |
+| META-007 | DONE   | profile UI                 | META-001..006   | loading/error/empty states; no client-authored progression          |
+
+**H review (2026-09-29):** META-001..007 per `docs/architecture/META-H.md`: progression is a read model over idempotent finalized history (duplicate-safe by construction; Collusion Guard removals earn nothing; no sandbox path writes history); coins buy looks-only cosmetics with a race-safe conditional insert; equipped rings reach rooms through a trusted Worker header validated against the catalog (protocol v4); `/me` has loading, error and empty states. Self-reviewed.
 
 ---
 
@@ -382,17 +386,17 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 | ------ | ------ | --------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
 | QA-001 | TODO   | 10-browser full match                   | QA-012,GRAND-002,RULE-019               | all clients converge through complete live match                             |
 | QA-002 | TODO   | reconnect chaos                         | QA-001,RT-008                           | no economic/state corruption across disconnect/replacement                   |
-| QA-003 | TODO   | persistence/deadline failure regression | RT-005,007,012,013                      | atomic boundaries/retry/reconstruction/finalization safe                     |
-| QA-004 | TODO   | 1000+ cross-board rematches             | RT-013,GRAND-001                        | zero old-game/cross-board contamination                                      |
+| QA-003 | DONE   | persistence/deadline failure regression | RT-005,007,012,013                      | atomic boundaries/retry/reconstruction/finalization safe                     |
+| QA-004 | DONE   | 1000+ cross-board rematches             | RT-013,GRAND-001                        | zero old-game/cross-board contamination                                      |
 | QA-005 | TODO   | large production seeded fuzz run        | QA-011,RULE-019                         | no invariant break; failing seeds reproducible                               |
 | QA-006 | TODO   | deployed quota rerun                    | QA-014                                  | <=10% desired; >20% fail                                                     |
 | QA-007 | TODO   | accessibility review                    | UI-013                                  | critical WCAG/keyboard/reduced-motion pass                                   |
 | QA-008 | TODO   | cross-browser                           | QA-001                                  | critical Chrome/Firefox/Safari/Edge flow pass                                |
 | QA-009 | TODO   | auth/security review                    | AUTH-001,RT-015,META-007,UI-014         | no blocker; direct API/client tampering cases covered                        |
 | QA-010 | TODO   | public-release IP review                | UI-013,GRAND-002                        | recorded human/legal decision; no copied trade dress/assets                  |
-| QA-011 | TODO   | production rule fuzz/sim adaptation     | RULE-019,CORE-013,CORE-014              | real production transitions; replay seeds; money/asset/phase/card invariants |
+| QA-011 | DONE   | production rule fuzz/sim adaptation     | RULE-019,CORE-013,CORE-014              | real production transitions; replay seeds; money/asset/phase/card invariants |
 | QA-012 | TODO   | runtime/browser verification foundation | RT-014,UI-014                           | runnable integration/E2E commands in CI                                      |
-| QA-013 | TODO   | Collusion Guard adversarial suite       | INT-002,RT-017,UI-016                   | deterministic evidence; duplicate/reconnect safety; false-positive cases     |
+| QA-013 | DONE   | Collusion Guard adversarial suite       | INT-002,RT-017,UI-016                   | deterministic evidence; duplicate/reconnect safety; false-positive cases     |
 | QA-014 | TODO   | production deploy/rollback smoke        | RT-012,013,014,015,016,UI-013,GRAND-002 | web+Worker+D1/auth/bindings smoke; rollback/recovery procedure verified      |
 | QA-015 | TODO   | final gameplay balance/human gate       | RULE-019,GRAND-005,QA-011               | both boards rerun with final mechanics; human pacing/snowball caveats closed |
 
