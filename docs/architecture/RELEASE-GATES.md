@@ -76,6 +76,8 @@ caveats for the human decision:
   one completes a set without trades. The rules have no length cap (freeze: last standing only),
   so a table that refuses to trade can run indefinitely. Decide whether that is acceptable or
   whether a later module (for example a round limit with net-worth tiebreak) is wanted.
+  **Owner decision (2026-09-29): accepted.** Players resign when they are done (new `RESIGN`);
+  a timed game mode may come later (POST-009).
 Record the human decision (approve, or the specific retune to try) here.
 
 ## GRAND-005 human alpha

@@ -38,6 +38,12 @@ is retired; only its size-agnostic layout math (`app/web/src/board/layout.ts`) r
 8. **Game log** lists committed events this tab received; the server keeps authoritative history.
 9. **Collusion Guard UX** is server-driven only: warnings are shown to the two players involved
    (as projected) and removals are public log lines. The client never judges a trade.
+10. **Pawns** are large ringed discs centred on their tile; the active player's pawn glows and bobs
+   and their tile is outlined. Pawns step tile by tile toward the authoritative position for display
+   only (long or backward moves and reduced motion jump).
+11. **One Roll button**: on the board beside the dice on desktop, in the rail on phones (where the
+   board scrolls). The centre stage sizes with the board (container units) so nothing overlaps.
+12. **Resign** sits under the turn panel's Trade and Manage deeds buttons, behind a confirmation.
 
 ## Dev preview
 

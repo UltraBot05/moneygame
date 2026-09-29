@@ -88,7 +88,8 @@ export interface DebtRuleState {
  */
 export interface EliminationFact {
   readonly userId: string;
-  readonly reason: "DECLARED" | "DEADLINE" | "REMOVED";
+  /** RESIGNED: the player left voluntarily with no debt; like a removal, it settles to the bank. */
+  readonly reason: "DECLARED" | "DEADLINE" | "REMOVED" | "RESIGNED";
   /** The debt resolution that ended in bankruptcy; null for a removal. */
   readonly resolutionId: string | null;
   readonly creditor: ObligationCreditor;
@@ -366,16 +367,17 @@ function parseElimination(value: unknown, index: number, context: AdvancedRulePa
     "userId", "reason", "resolutionId", "creditor", "obligationAmount", "cashTransferred", "assetIds",
     "gameVersion", "actionId",
   ], path);
-  if (item.reason !== "DECLARED" && item.reason !== "DEADLINE" && item.reason !== "REMOVED") {
+  if (item.reason !== "DECLARED" && item.reason !== "DEADLINE" && item.reason !== "REMOVED" && item.reason !== "RESIGNED") {
     invalid(path + ".reason", "unknown reason");
   }
+  const debtless = item.reason === "REMOVED" || item.reason === "RESIGNED";
   const resolutionId = nullableId(item.resolutionId, path + ".resolutionId");
   const obligationAmount = integer(item.obligationAmount, path + ".obligationAmount");
-  if ((item.reason === "REMOVED") !== (resolutionId === null) || (resolutionId !== null) !== (obligationAmount > 0)) {
-    invalid(path, "a bankruptcy ends a debt; a removal has none");
+  if (debtless !== (resolutionId === null) || (resolutionId !== null) !== (obligationAmount > 0)) {
+    invalid(path, "a bankruptcy ends a debt; a removal or resignation has none");
   }
   const creditor = parseCreditor(item.creditor, path + ".creditor", context.playerIds);
-  if (item.reason === "REMOVED" && creditor.type !== "BANK") invalid(path + ".creditor", "a removal settles to the bank");
+  if (debtless && creditor.type !== "BANK") invalid(path + ".creditor", "a removal or resignation settles to the bank");
   const assetIds = stringList(item.assetIds, path + ".assetIds");
   for (const assetId of assetIds) {
     if (!context.assetIds.has(assetId)) invalid(path + ".assetIds", "unknown asset " + assetId);

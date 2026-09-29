@@ -153,8 +153,17 @@ async function act(pages: readonly Page[], names: readonly string[], actions: nu
       await pass.click();
       return true;
     }
+    // A card reveal covers the stage until this viewer dismisses it (local only).
+    const reveal = page.locator(".event-card").getByRole("button", { name: "Continue" });
+    if (await reveal.isVisible()) await reveal.click();
+    // On desktop the roll button sits on the board beside the dice.
+    const roll = page.locator(".stage .stage-roll");
+    if (await roll.isVisible() && await roll.isEnabled()) {
+      await roll.click();
+      return true;
+    }
     const turn = page.getByRole("region", { name: "Turn" });
-    const primary = turn.locator(".btn-primary");
+    const primary = turn.locator(".btn-primary:visible");
     if (await primary.isVisible() && await primary.isEnabled()) {
       // Trade and develop before ending the turn, so rents grow and a full match can finish.
       if (FULL && (await primary.innerText()).trim() === "End turn") {

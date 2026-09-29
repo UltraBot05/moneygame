@@ -72,3 +72,13 @@ test("trade dialog keeps its actions on screen with a long deed list", async ({ 
   expect(await page.locator(".trade-columns .trade-side").nth(1).locator(".trade-item").count()).toBeGreaterThan(10);
   await expect(page.getByRole("button", { name: "Send offer" })).toBeInViewport();
 });
+
+test("a player can resign mid-match and the turn moves on", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/dev/preview?scene=start");
+  await page.getByRole("button", { name: "Resign from match" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Resign" }).click();
+  await expect(page.locator(".player-row.out")).toHaveCount(1);
+  await page.getByRole("tab", { name: /Game log/ }).click();
+  await expect(page.locator(".log-line").first()).toContainText("resigned");
+});

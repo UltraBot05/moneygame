@@ -60,7 +60,7 @@ const COMMAND_TYPES = [
   "BUILD", "SELL_DEVELOPMENT", "MORTGAGE", "UNMORTGAGE",
   "DRAW_CARD", "PAY_HOLDING_FEE", "USE_RELEASE_CARD",
   "PROPOSE_TRADE", "COUNTER_TRADE", "ACCEPT_TRADE", "REJECT_TRADE", "CANCEL_TRADE",
-  "DEBT_TIMEOUT", "DECLARE_BANKRUPTCY", "TURN_TIMEOUT", "RESUME_CLOCKS",
+  "DEBT_TIMEOUT", "DECLARE_BANKRUPTCY", "TURN_TIMEOUT", "RESUME_CLOCKS", "RESIGN",
 ] as const;
 
 /** Commands only the room runtime may issue (from persisted deadlines), never a client. */
@@ -71,7 +71,7 @@ export const SYSTEM_COMMAND_TYPES: ReadonlySet<string> = new Set([
 export type GameplayCommandType = (typeof COMMAND_TYPES)[number];
 
 const EMPTY_PAYLOAD_COMMANDS: ReadonlySet<string> = new Set([
-  "START_GAME", "ROLL_DICE", "END_TURN", "PAY_HOLDING_FEE",
+  "START_GAME", "ROLL_DICE", "END_TURN", "PAY_HOLDING_FEE", "RESIGN",
 ]);
 
 export interface GameplayCommandContext {
@@ -246,7 +246,8 @@ export type GameplayRejectionReason =
   | "STALE_DEBT_TIMEOUT"
   | "STALE_TURN_TIMEOUT"
   | "NOTHING_TO_AUTO_PLAY"
-  | "NO_CLOCKS_TO_RESUME";
+  | "NO_CLOCKS_TO_RESUME"
+  | "RESIGN_BLOCKED_DURING_AUCTION";
 
 export type GameplayCommandResult =
   | {
@@ -1899,6 +1900,33 @@ function declareBankruptcy(state: GameState, env: RuleEnv): GameplayCommandResul
   return bankrupt(state, env, "DECLARED");
 }
 
+/**
+ * A player leaves the match of their own accord (for example a table that is done playing). In
+ * debt it is exactly a declared bankruptcy, so the creditor is still paid; otherwise the player's
+ * cash and deeds return to the bank like a removal. Not during a live auction, whose bidding
+ * order would otherwise change mid-round.
+ */
+function resign(state: GameState, env: RuleEnv): GameplayCommandResult {
+  if (state.phase === "STARTING") return rejected(state, "GAME_NOT_STARTED");
+  if (state.phase === "GAME_OVER" || state.turn === null) return rejected(state, "GAME_ALREADY_ENDED");
+  const player = state.players.find((candidate) => candidate.userId === env.actorUserId);
+  if (player === undefined) return rejected(state, "ACTOR_NOT_IN_GAME");
+  if (player.status !== "ACTIVE") return rejected(state, "PLAYER_NOT_ELIGIBLE");
+  if (state.auction !== null) return rejected(state, "RESIGN_BLOCKED_DURING_AUCTION");
+  if (state.pendingResolution?.obligation?.debtorUserId === env.actorUserId) return bankrupt(state, env, "DECLARED");
+  const result = eliminate(state, env, draftOf(state, state.turn), [{
+    userId: env.actorUserId, reason: "RESIGNED", resolutionId: null, creditor: { type: "BANK" }, obligationAmount: 0,
+  }]);
+  return accepted(result.state, {
+    type: "PLAYER_BANKRUPT",
+    fact: result.facts[0] as EliminationFact,
+    removals: [],
+    incidents: [],
+    activePlayerId: result.activePlayerId,
+    outcome: result.outcome,
+  });
+}
+
 /** Expiry of the persisted absolute debt deadline forces bankruptcy. */
 function timeoutDebt(state: GameState, env: RuleEnv): GameplayCommandResult {
   const now = authoritativeInteger(env.context.currentTime, "context.currentTime");
@@ -1998,6 +2026,7 @@ export function applyGameplayCommand(
     case "DEBT_TIMEOUT": return timeoutDebt(state, env);
     case "DECLARE_BANKRUPTCY": return declareBankruptcy(state, env);
     case "TURN_TIMEOUT": return timeoutTurn(state, env);
+    case "RESIGN": return resign(state, env);
     case "RESUME_CLOCKS": return resumeClocks(state, env);
   }
 }

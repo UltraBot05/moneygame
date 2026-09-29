@@ -565,7 +565,8 @@ export function describeEvent(event: GameplayEvent, game: ProjectedGameState, bo
     case "TURN_AUTO_PLAYED":
       return [names(event.playerId) + "'s time ran out. The turn was auto-played.", ...event.steps.flatMap((step) => describeEvent(step, game, board, names))];
     case "PLAYER_BANKRUPT": {
-      const lines = [names(event.fact.userId) + (event.fact.reason === "REMOVED" ? " was removed by the Collusion Guard." : " went bankrupt.")];
+      const how = { REMOVED: " was removed by the Collusion Guard.", RESIGNED: " resigned.", DECLARED: " went bankrupt.", DEADLINE: " went bankrupt." }[event.fact.reason];
+      const lines = [names(event.fact.userId) + how];
       for (const incident of event.incidents) lines.push(incidentLine(incident.consequence, names(incident.giverUserId), names(incident.receiverUserId)));
       for (const removal of event.removals) lines.push(names(removal.userId) + " was removed by the Collusion Guard.");
       if (event.outcome !== null) lines.push(event.outcome.winnerUserIds.map(names).join(" and ") + (event.outcome.winnerUserIds.length > 1 ? " win the match." : " wins the match."));

@@ -75,7 +75,39 @@ interface BoardProps {
   readonly children: ReactNode;
 }
 
+/**
+ * Display-only pawn movement: each pawn steps one tile at a time toward its authoritative
+ * position (the server state is never changed). Long or backward moves, such as Go To Holding
+ * or a card, jump; reduced-motion users always jump.
+ */
+function useSteppedPositions(game: ProjectedGameState): Readonly<Record<string, number>> {
+  const tileCount = game.board.tileCount;
+  const target = useMemo(() => Object.fromEntries(game.players.map((player) => [player.userId, player.position])), [game.players]);
+  const [shown, setShown] = useState<Readonly<Record<string, number>>>(target);
+  useEffect(() => {
+    const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = setInterval(() => {
+      setShown((previous) => {
+        let changed = false;
+        const next: Record<string, number> = {};
+        for (const [userId, to] of Object.entries(target)) {
+          const from = previous[userId];
+          const ahead = from === undefined ? 0 : (to - from + tileCount) % tileCount;
+          next[userId] = from === undefined || reduce || ahead === 0 || ahead > 16 ? to : (from + 1) % tileCount;
+          if (next[userId] !== from) changed = true;
+        }
+        return changed ? next : previous;
+      });
+    }, 130);
+    return () => clearInterval(timer);
+  }, [target, tileCount]);
+  return shown;
+}
+
 function BoardView({ game, board, players, selected, onSelect, children }: BoardProps) {
+  const shown = useSteppedPositions(game);
+  const activeUserId = players.find((player) => player.active)?.userId;
+  const activeTile = activeUserId === undefined ? null : shown[activeUserId] ?? null;
   const layout = useMemo(() => computeLayout(board.tiles.length), [board.tiles.length]);
   return (
     <div className="board" role="group" aria-label={board.label + " board"}>
@@ -83,10 +115,10 @@ function BoardView({ game, board, players, selected, onSelect, children }: Board
         {layout.tiles.map((position) => {
           const tile = board.tiles[position.index];
           if (tile === undefined) return null;
-          const here = players.filter((player) => !player.bankrupt && game.players.find((p) => p.userId === player.userId)?.position === tile.index);
+          const here = players.filter((player) => !player.bankrupt && shown[player.userId] === tile.index);
           return (
             <TileView key={tile.index} tile={tile} position={position} game={game} players={players} here={here}
-              selected={selected === tile.index} onSelect={onSelect} />
+              selected={selected === tile.index} activeHere={activeTile === tile.index} onSelect={onSelect} />
           );
         })}
         <div className="stage" style={{ gridRow: layout.center.row + " / span " + layout.center.span, gridColumn: layout.center.column + " / span " + layout.center.span }}>
@@ -104,6 +136,8 @@ interface TileProps {
   readonly players: readonly PlayerModel[];
   readonly here: readonly PlayerModel[];
   readonly selected: boolean;
+  /** The active player's pawn stands here. */
+  readonly activeHere: boolean;
   readonly onSelect: (index: number) => void;
 }
 
@@ -112,15 +146,16 @@ function Tokens({ list }: { list: readonly PlayerModel[] }) {
   return <span className="tile-tokens">{list.map((player) => <Token key={player.userId} player={player} active={player.active} />)}</span>;
 }
 
-function TileView({ tile, position, game, players, here, selected, onSelect }: TileProps) {
+function TileView({ tile, position, game, players, here, selected, activeHere, onSelect }: TileProps) {
   const place = { gridRow: position.gridRow, gridColumn: position.gridColumn };
+  const highlight = activeHere ? " tile-active" : "";
   if (tile.kind === "corner") {
     const holding = tile.corner === "HOLDING";
     const inside = here.filter((player) => player.inHolding);
     const visiting = here.filter((player) => !player.inHolding);
     const glyph = tile.corner === "START" ? "▶" : tile.corner === "VACATION" ? "◍" : tile.corner === "GO_TO_HOLDING" ? "⇥" : "";
     return (
-      <div className="tile corner" data-edge="corner" style={place} aria-label={tile.name}>
+      <div className={"tile corner" + highlight} data-edge="corner" style={place} aria-label={tile.name}>
         {holding ? (
           <>
             <span className="visiting-lane"><span>Visiting</span></span>
@@ -169,11 +204,11 @@ function TileView({ tile, position, game, players, here, selected, onSelect }: T
     </>
   );
   return ownable ? (
-    <button type="button" className="tile" data-edge={position.edge} style={place} aria-pressed={selected} aria-label={label} onClick={() => onSelect(tile.index)}>
+    <button type="button" className={"tile" + highlight} data-edge={position.edge} style={place} aria-pressed={selected} aria-label={label} onClick={() => onSelect(tile.index)}>
       {content}
     </button>
   ) : (
-    <div className="tile" data-edge={position.edge} style={place} aria-label={label}>{content}</div>
+    <div className={"tile" + highlight} data-edge={position.edge} style={place} aria-label={label}>{content}</div>
   );
 }
 
@@ -183,7 +218,8 @@ function ActionButtons({ primary, secondary, busy, act, dark = false }: {
   return (
     <>
       {primary !== null && (
-        <button type="button" className="btn btn-primary" disabled={busy || primary.disabledReason !== undefined}
+        // Rolling happens on the board beside the dice; the rail copy only shows on phones (see .rail-roll).
+        <button type="button" className={"btn btn-primary" + (primary.intent.type === "ROLL_DICE" ? " rail-roll" : "")} disabled={busy || primary.disabledReason !== undefined}
           title={primary.disabledReason} onClick={() => act(primary.intent)}>
           {primary.label}{primary.disabledReason !== undefined && <span style={{ fontWeight: 600, fontSize: 11 }}> · {primary.disabledReason}</span>}
         </button>
@@ -267,7 +303,7 @@ function CenterStage(props: StageProps) {
       </div>
       <div className="stage-mid">
         <span className="label" style={{ color: turn.isMine ? "var(--primary)" : "var(--ink-mute)" }}>{turn.kicker}</span>
-        <div style={{ display: "flex", gap: 16 }}>
+        <div className="stage-dice">
           <Die key={"a" + (roll?.id ?? 0)} face={roll?.dice[0] ?? null} rolling={roll !== null} />
           <Die key={"b" + (roll?.id ?? 0)} face={roll?.dice[1] ?? null} rolling={roll !== null} />
         </div>
@@ -278,7 +314,7 @@ function CenterStage(props: StageProps) {
           </span>
         )}
         {rollAction !== null && (
-          <button type="button" className="btn btn-primary" style={{ padding: "13px 30px", fontSize: 16 }} disabled={busy}
+          <button type="button" className="btn btn-primary stage-roll" disabled={busy}
             onClick={() => act(rollAction.intent)}>{rollAction.label}</button>
         )}
       </div>
@@ -441,6 +477,7 @@ interface RailProps {
   readonly onTrade: (draft: TradeDraft) => void;
   readonly onSelect: (index: number) => void;
   readonly onBankrupt: () => void;
+  readonly onResign: () => void;
 }
 
 function DebtPanel({ game, room, board, viewerUserId, now, snapshot, onSelect, onTrade, onBankrupt, busy }: RailProps) {
@@ -480,7 +517,7 @@ function DebtPanel({ game, room, board, viewerUserId, now, snapshot, onSelect, o
 }
 
 function TurnPanel(props: RailProps) {
-  const { game, room, board, players, viewerUserId, spectator, busy, act, now, snapshot, onTrade, onSelect } = props;
+  const { game, room, board, players, viewerUserId, spectator, busy, act, now, snapshot, onTrade, onSelect, onResign } = props;
   const turn = turnModel(game, room, board, viewerUserId);
   const active = players.find((player) => player.active);
   const seconds = secondsLeft(room.turnDeadlineAt, now, snapshot.clockOffset);
@@ -532,6 +569,12 @@ function TurnPanel(props: RailProps) {
                 setDeedCursor(deedCursor + 1);
               }}>Manage deeds</button>
           </div>
+          {me?.status === "ACTIVE" && (
+            <button type="button" className="btn btn-ghost" style={{ alignSelf: "flex-end", padding: "4px 0", fontSize: 12 }}
+              disabled={busy || game.auction !== null} title={game.auction !== null ? "Wait for the auction to end" : undefined} onClick={onResign}>
+              Resign from match
+            </button>
+          )}
         </div>
       )}
     </section>
@@ -674,6 +717,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
   const [selected, setSelected] = useState<number | null>(null);
   const [trade, setTrade] = useState<TradeDraft | null>(null);
   const [confirmBankrupt, setConfirmBankrupt] = useState(false);
+  const [confirmResign, setConfirmResign] = useState(false);
   const now = useNow();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -681,6 +725,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
       setSelected(null);
       setTrade(null);
       setConfirmBankrupt(false);
+      setConfirmResign(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -698,7 +743,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
   const pending = game.pendingResolution;
   const railProps: RailProps = {
     snapshot, client, game, room, board, players, viewerUserId, spectator, busy, act, now,
-    onTrade: setTrade, onSelect: setSelected, onBankrupt: () => setConfirmBankrupt(true),
+    onTrade: setTrade, onSelect: setSelected, onBankrupt: () => setConfirmBankrupt(true), onResign: () => setConfirmResign(true),
   };
   const seconds = secondsLeft(room.turnDeadlineAt, now, snapshot.clockOffset);
   return (
@@ -748,6 +793,14 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
           body="Your cash and building sell-back go to the creditor and your deeds leave the game. You will be out of the match. This cannot be undone."
           onCancel={() => setConfirmBankrupt(false)}
           onConfirm={() => { act({ type: "DECLARE_BANKRUPTCY", payload: { resolutionId: pending.resolutionId } }); setConfirmBankrupt(false); }} />
+      )}
+      {confirmResign && (
+        <ConfirmDialog title="Resign from the match?" confirmLabel="Resign"
+          body={pending?.obligation?.debtorUserId === viewerUserId
+            ? "You owe a payment, so resigning is the same as declaring bankruptcy: your cash and building sell-back go to the creditor. You will watch the rest of the match. This cannot be undone."
+            : "Your cash and deeds go back to the bank and you will watch the rest of the match. This cannot be undone."}
+          onCancel={() => setConfirmResign(false)}
+          onConfirm={() => { act({ type: "RESIGN", payload: {} }); setConfirmResign(false); }} />
       )}
     </div>
   );
