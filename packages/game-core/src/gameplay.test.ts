@@ -51,6 +51,7 @@ function withBankrupt(state: ReturnType<typeof startedGame>, userIds: readonly s
       eliminations: userIds.map((userId) => ({
         userId,
         reason: "DECLARED",
+        resolutionId: "debt-" + userId,
         creditor: { type: "BANK" },
         obligationAmount: 1,
         cashTransferred: 0,

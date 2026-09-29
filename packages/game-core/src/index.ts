@@ -11,6 +11,7 @@ export * from "./command";
 export * from "./dice";
 export * from "./economy";
 export * from "./gameplay";
+export * from "./integrity";
 export * from "./lobby";
 export * from "./movement";
 export * from "./random";
