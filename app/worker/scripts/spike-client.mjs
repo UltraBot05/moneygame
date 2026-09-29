@@ -1,3 +1,6 @@
+// HISTORICAL: targeted the SpikeRoom Durable Object, retired in RT-015 (migration v4).
+// Kept as SPIKE-001 evidence; live multi-client checks now run in e2e/live (QA-012).
+//
 // SPIKE-001 evidence harness. Uses Node's built-in WebSocket (Node >= 22), so
 // no dependency is added. Run against `wrangler dev` or a deployed URL.
 //

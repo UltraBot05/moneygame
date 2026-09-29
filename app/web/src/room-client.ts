@@ -113,6 +113,8 @@ export class RoomClient {
     const socket = this.socket;
     this.socket = null;
     if (socket !== null) {
+      socket.onopen = null;
+      socket.onmessage = null;
       socket.onclose = null;
       socket.close();
     }
@@ -171,7 +173,8 @@ export class RoomClient {
       this.attempt = 0;
     };
     socket.onmessage = (message) => {
-      if (typeof message.data !== "string") return;
+      // Frames from a socket we already replaced (e.g. a late SESSION_REPLACED) are ignored.
+      if (this.socket !== socket || typeof message.data !== "string") return;
       let parsed: ServerMessage;
       try {
         parsed = JSON.parse(message.data) as ServerMessage;

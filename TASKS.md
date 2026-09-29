@@ -390,15 +390,17 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 | QA-004 | DONE   | 1000+ cross-board rematches             | RT-013,GRAND-001                        | zero old-game/cross-board contamination                                      |
 | QA-005 | TODO   | large production seeded fuzz run        | QA-011,RULE-019                         | no invariant break; failing seeds reproducible                               |
 | QA-006 | TODO   | deployed quota rerun                    | QA-014                                  | <=10% desired; >20% fail                                                     |
-| QA-007 | TODO   | accessibility review                    | UI-013                                  | critical WCAG/keyboard/reduced-motion pass                                   |
-| QA-008 | TODO   | cross-browser                           | QA-001                                  | critical Chrome/Firefox/Safari/Edge flow pass                                |
-| QA-009 | TODO   | auth/security review                    | AUTH-001,RT-015,META-007,UI-014         | no blocker; direct API/client tampering cases covered                        |
+| QA-007 | DONE   | accessibility review                    | UI-013                                  | critical WCAG/keyboard/reduced-motion pass                                   |
+| QA-008 | DONE   | cross-browser                           | QA-001                                  | critical Chrome/Firefox/Safari/Edge flow pass                                |
+| QA-009 | DONE   | auth/security review                    | AUTH-001,RT-015,META-007,UI-014         | no blocker; direct API/client tampering cases covered                        |
 | QA-010 | TODO   | public-release IP review                | UI-013,GRAND-002                        | recorded human/legal decision; no copied trade dress/assets                  |
 | QA-011 | DONE   | production rule fuzz/sim adaptation     | RULE-019,CORE-013,CORE-014              | real production transitions; replay seeds; money/asset/phase/card invariants |
-| QA-012 | TODO   | runtime/browser verification foundation | RT-014,UI-014                           | runnable integration/E2E commands in CI                                      |
+| QA-012 | DONE   | runtime/browser verification foundation | RT-014,UI-014                           | runnable integration/E2E commands in CI                                      |
 | QA-013 | DONE   | Collusion Guard adversarial suite       | INT-002,RT-017,UI-016                   | deterministic evidence; duplicate/reconnect safety; false-positive cases     |
 | QA-014 | TODO   | production deploy/rollback smoke        | RT-012,013,014,015,016,UI-013,GRAND-002 | web+Worker+D1/auth/bindings smoke; rollback/recovery procedure verified      |
 | QA-015 | TODO   | final gameplay balance/human gate       | RULE-019,GRAND-005,QA-011               | both boards rerun with final mechanics; human pacing/snowball caveats closed |
+
+**I review (2026-09-29, in progress):** QA-003/004/011/013 landed with #21. QA-012: `pnpm test:e2e:live` runs real browsers against `wrangler dev` (Worker, Durable Objects, local D1) in CI, asserting every client converges on the same version and fingerprint after each action, plus rejoin and session replacement; sign-in uses the localhost-only test route. QA-008: smoke runs on Chromium, Firefox and WebKit in CI (Edge is Chromium; real Safari remains a manual check). QA-009 and QA-007: reviews in `docs/architecture/QA-009-SECURITY-REVIEW.md` and `QA-007-ACCESSIBILITY-REVIEW.md` with fixes made. QA-006/010/014/015 and GRAND-005 are human or deploy gates, prepared in `docs/architecture/RELEASE-GATES.md` and not claimed.
 
 ---
 
