@@ -29,7 +29,8 @@ last pass over the whole codebase.
 | 5 | Web | Several AA contrast failures and dialogs not taking focus | fixed (QA-007) |
 | 6 | Docs | No README describing the stack, hosting and how to run | `README.md` |
 | 7 | Tooling | The SPIKE-001 client targets the retired SpikeRoom without saying so | marked historical |
-| 8 | Test driver | The live full-match driver never built, so a full match could not end | the driver builds before ending a turn |
+| 8 | Test driver | The live full-match driver never built or traded, so a full match could not end | the driver builds and makes set-completion trades before ending a turn |
+| 9 | Web UI | Found by the 10-browser run: with a long deed list (typical on Grand) the trade dialog grew past the viewport and "Send offer" could not be reached | the dialog's height now applies (flex-centred overlay), deed lists scroll inside their columns; smoke regression test added |
 
 ## Accepted, recommended follow-ups (not bugs)
 
