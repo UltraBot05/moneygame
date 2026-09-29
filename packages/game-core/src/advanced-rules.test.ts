@@ -1,225 +1,45 @@
 import { describe, expect, it } from "vitest";
-import standardFixture from "../../../boards/world-tour/standard.json";
 import {
   drawCard,
   EMPTY_ADVANCED_RULE_STATE,
   initializeDecks,
   returnHeldCard,
 } from "./advanced-rules";
-import { parseBoardDefinition } from "./board";
-import { parseCardCatalog, type CardCatalogDefinition } from "./cards";
+import { type CardCatalogDefinition } from "./cards";
 import { CommandValidationError } from "./command";
-import {
-  applyGameplayCommand,
-  type GameplayCommandContext,
-  type GameplayCommandResult,
-} from "./gameplay";
+import { applyGameplayCommand } from "./gameplay";
 import { createSeededRandom } from "./random";
+import { parseGameState, type GameState } from "./state";
 import {
-  createInitialGameState,
-  parseGameState,
-  type GameState,
-  type MatchMode,
-  type TurnIdentity,
-} from "./state";
-
-const board = parseBoardDefinition(standardFixture);
-const alice = "google:alice";
-const bob = "google:bob";
-const carol = "google:carol";
-const EG1 = "property:EG-1";
-const EG2 = "property:EG-2";
-const MA1 = "property:MA-1";
-const MA2 = "property:MA-2";
-const MA3 = "property:MA-3";
-const FR2 = "property:FR-2";
-const POWER_GRID = "utility:4";
-
-interface CardSpec {
-  readonly cardId: string;
-  readonly effectId: string;
-  readonly held?: boolean;
-}
-
-const PLUS_FIVE = { cardId: "treasure:plus-five", effectId: "plus-five" };
-
-function catalog(
-  surprise: readonly CardSpec[],
-  effects: readonly Record<string, unknown>[] = [],
-  treasure: readonly CardSpec[] = [PLUS_FIVE],
-): CardCatalogDefinition {
-  const card = (deckId: string) => (spec: CardSpec) => ({
-    cardId: spec.cardId,
-    deckId,
-    effectId: spec.effectId,
-    heldCapability: spec.held === true ? "DETENTION_RELEASE" : null,
-  });
-  return parseCardCatalog({
-    decks: [
-      { deckId: "surprise", cardIds: surprise.map((spec) => spec.cardId) },
-      { deckId: "treasure", cardIds: treasure.map((spec) => spec.cardId) },
-    ],
-    cards: [...surprise.map(card("surprise")), ...treasure.map(card("treasure"))],
-    effects: [
-      { effectId: "plus-one", type: "ADJUST_CASH", target: "CURRENT_PLAYER", amount: 1 },
-      { effectId: "plus-five", type: "ADJUST_CASH", target: "CURRENT_PLAYER", amount: 5 },
-      { effectId: "plus-ten", type: "ADJUST_CASH", target: "CURRENT_PLAYER", amount: 10 },
-      ...effects,
-    ],
-  }, board);
-}
-
-/** A one-card Surprise deck whose card runs `effectId`. */
-function oneCard(effectId: string, effects: readonly Record<string, unknown>[] = []) {
-  return catalog([{ cardId: "surprise:only", effectId }], effects);
-}
-
-interface RunOptions {
-  readonly cards?: CardCatalogDefinition | undefined;
-  readonly dice?: readonly number[];
-  readonly extra?: Partial<GameplayCommandContext>;
-  readonly actionId?: string;
-}
-
-let actionCounter = 0;
-
-function run(
-  state: GameState,
-  type: string,
-  actorUserId: string,
-  payload: unknown = {},
-  options: RunOptions = {},
-): GameplayCommandResult {
-  const faces = (options.dice ?? []).map((face) => (face - 1) / 6 + 0.001);
-  const seeded = createSeededRandom(7);
-  let index = 0;
-  actionCounter += 1;
-  return applyGameplayCommand(
-    state,
-    {
-      type,
-      gameId: state.gameId,
-      actionId: options.actionId ?? "action-" + actionCounter,
-      expectedGameVersion: state.gameVersion,
-      payload,
-    },
-    {
-      actorUserId,
-      board,
-      rng: () => index < faces.length ? faces[index++] as number : seeded(),
-      currentTime: 1000,
-      auctionDecisionDeadlineAt: 2000,
-      debtDeadlineAt: 3000,
-      ...(options.cards === undefined ? {} : { cardCatalog: options.cards }),
-      ...options.extra,
-    },
-  );
-}
-
-function ok(result: GameplayCommandResult): GameState {
-  if (result.kind !== "ACCEPTED") throw new Error("expected ACCEPTED, got " + JSON.stringify(result));
-  return result.state;
-}
-
-function refused(result: GameplayCommandResult, reason: string, before: GameState): void {
-  expect(result).toMatchObject({ kind: "REJECTED", reason });
-  expect(result.state).toEqual(before);
-  expect(result.state.gameVersion).toBe(before.gameVersion);
-}
-
-function roundTrip(state: GameState, cards?: CardCatalogDefinition): GameState {
-  const restored = parseGameState(JSON.parse(JSON.stringify(state)), board, cards);
-  expect(restored).toEqual(state);
-  return restored;
-}
-
-function started(matchMode: MatchMode = "FFA"): GameState {
-  const initial = createInitialGameState({
-    gameId: "d2-game", board, playerIds: [alice, bob, carol], matchMode,
-  });
-  return ok(run(initial, "START_GAME", alice));
-}
-
-interface Setup {
-  readonly cash?: Readonly<Record<string, number>>;
-  readonly positions?: Readonly<Record<string, number>>;
-  readonly holding?: number;
-  readonly owners?: Readonly<Record<string, string>>;
-  readonly mortgaged?: readonly string[];
-  readonly development?: Readonly<Record<string, number>>;
-  readonly turn?: Partial<TurnIdentity>;
-  readonly ruleState?: object;
-}
-
-/** Alice owns the opening turn; `holding` puts her in Holding with that many failed attempts. */
-function setup(input: Setup = {}, cards?: CardCatalogDefinition, base: GameState = started()): GameState {
-  return parseGameState({
-    ...base,
-    turn: { ...base.turn, ...input.turn },
-    players: base.players.map((player) => ({
-      ...player,
-      cash: input.cash?.[player.userId] ?? player.cash,
-      position: input.positions?.[player.userId] ?? player.position,
-      ...(player.userId === alice && input.holding !== undefined
-        ? { position: 10, inHolding: true, holdingAttempts: input.holding }
-        : {}),
-    })),
-    assets: base.assets.map((asset) => ({
-      ...asset,
-      ownerUserId: input.owners?.[asset.assetId] ?? asset.ownerUserId,
-      mortgaged: input.mortgaged?.includes(asset.assetId) ?? asset.mortgaged,
-      ...(asset.kind === "PROPERTY"
-        ? { developmentLevel: input.development?.[asset.assetId] ?? asset.developmentLevel }
-        : {}),
-    })),
-    ruleState: { ...base.ruleState, ...input.ruleState },
-  }, board, cards);
-}
-
-function player(state: GameState, userId: string) {
-  const found = state.players.find((candidate) => candidate.userId === userId);
-  if (found === undefined) throw new Error("missing player " + userId);
-  return found;
-}
-
-function asset(state: GameState, assetId: string) {
-  const found = state.assets.find((candidate) => candidate.assetId === assetId);
-  if (found === undefined) throw new Error("missing asset " + assetId);
-  return found;
-}
-
-/** Alice rolls 1+2 from `tile - 3` onto `tile`. */
-function landOn(tile: number, input: Setup = {}, cards?: CardCatalogDefinition): GameState {
-  const state = setup({ ...input, positions: { ...input.positions, [alice]: tile - 3 } }, cards);
-  return ok(run(state, "ROLL_DICE", alice, {}, { cards, dice: [1, 2] }));
-}
-
-function drawFrom(state: GameState, cards?: CardCatalogDefinition, options: RunOptions = {}) {
-  return run(state, "DRAW_CARD", alice, { resolutionId: state.pendingResolution?.resolutionId }, {
-    ...options,
-    ...(cards === undefined ? {} : { cards }),
-  });
-}
-
-function bundle(cash: number, assetIds: readonly string[] = []) {
-  return { cash, assetIds };
-}
-
-function propose(
-  state: GameState,
-  from: string,
-  to: string,
-  offered: ReturnType<typeof bundle>,
-  requested: ReturnType<typeof bundle>,
-) {
-  return run(state, "PROPOSE_TRADE", from, { recipientUserId: to, offered, requested });
-}
-
-function openTradeId(state: GameState): string {
-  const trade = state.ruleState.trades.at(-1);
-  if (trade === undefined) throw new Error("expected an open trade");
-  return trade.tradeId;
-}
+  board,
+  alice,
+  bob,
+  carol,
+  EG1,
+  EG2,
+  MA1,
+  MA2,
+  MA3,
+  FR2,
+  POWER_GRID,
+  PLUS_FIVE,
+  catalog,
+  oneCard,
+  run,
+  ok,
+  refused,
+  roundTrip,
+  started,
+  type Setup,
+  setup,
+  player,
+  asset,
+  landOn,
+  drawFrom,
+  bundle,
+  propose,
+  openTradeId,
+} from "./rules.testkit";
 
 describe("RULE-009 deterministic deck and held-card engine", () => {
   const cards = catalog([
@@ -442,7 +262,7 @@ describe("RULE-010 closed effect execution with a shared 16-step budget", () => 
       roll: landed.pendingResolution?.roll,
     });
     expect(suspended.ruleState.debt).toEqual({
-      resolutionId: suspended.pendingResolution?.resolutionId, deadlineAt: 3000, bankruptcyRequired: false,
+      resolutionId: suspended.pendingResolution?.resolutionId, deadlineAt: 3000,
     });
     expect(player(suspended, alice).cash).toBe(450);
     const restored = roundTrip(suspended, cards);
@@ -850,7 +670,7 @@ describe("RULE-015 debt and liquidation", () => {
     expect(rentDebt.pendingResolution?.obligation).toMatchObject({
       debtorUserId: alice, creditor: { type: "PLAYER", userId: bob }, amount: 10,
     });
-    expect(rentDebt.ruleState.debt).toMatchObject({ deadlineAt: 3000, bankruptcyRequired: false });
+    expect(rentDebt.ruleState.debt).toMatchObject({ deadlineAt: 3000 });
 
     const owing = taxDebt({ owners: { [EG1]: alice }, mortgaged: [EG1] });
     expect(owing.pendingResolution?.obligation).toMatchObject({ creditor: { type: "BANK" }, amount: 100 });
@@ -926,7 +746,7 @@ describe("RULE-015 debt and liquidation", () => {
     expect(settled.pendingResolution).toBeNull();
   });
 
-  it("expires only at the persisted deadline and hands off to bankruptcy without transfer", () => {
+  it("expires only at the persisted deadline, which forces bankruptcy", () => {
     const owing = taxDebt({ owners: { [EG1]: alice } });
     const resolutionId = owing.pendingResolution!.resolutionId;
     const timeout = (state: GameState, payload: Record<string, unknown>, currentTime: number) =>
@@ -935,19 +755,12 @@ describe("RULE-015 debt and liquidation", () => {
     refused(timeout(owing, { resolutionId, deadlineAt: 2500 }, 3000), "STALE_DEBT_TIMEOUT", owing);
     refused(timeout(owing, { resolutionId: "stale", deadlineAt: 3000 }, 3000), "DEBT_NOT_ACTIVE", owing);
 
-    const handoff = timeout(owing, { resolutionId, deadlineAt: 3000 }, 3000);
-    expect(handoff).toMatchObject({
-      event: { type: "DEBT_HANDOFF", resolutionId, obligation: { amount: 100, creditor: { type: "BANK" } } },
+    const forced = timeout(owing, { resolutionId, deadlineAt: 3000 }, 3000);
+    expect(forced).toMatchObject({
+      event: { type: "PLAYER_BANKRUPT", fact: { userId: alice, reason: "DEADLINE", creditor: { type: "BANK" } } },
     });
-    const bankrupting = roundTrip(ok(handoff));
-    expect(bankrupting.ruleState.debt?.bankruptcyRequired).toBe(true);
-    expect(bankrupting.pendingResolution).toEqual(owing.pendingResolution);
-    expect(bankrupting.players).toEqual(owing.players);
-    expect(bankrupting.assets).toEqual(owing.assets);
-    refused(run(bankrupting, "MORTGAGE", alice, { assetId: EG1 }), "DEBT_HANDOFF_PENDING", bankrupting);
-    refused(
-      propose(bankrupting, alice, bob, bundle(0, [EG1]), bundle(200)), "DEBT_HANDOFF_PENDING", bankrupting,
-    );
-    refused(timeout(bankrupting, { resolutionId, deadlineAt: 3000 }, 4000), "DEBT_NOT_ACTIVE", bankrupting);
+    const after = roundTrip(ok(forced));
+    expect(player(after, alice)).toMatchObject({ status: "BANKRUPT", cash: 0 });
+    refused(timeout(after, { resolutionId, deadlineAt: 3000 }, 4000), "DEBT_NOT_ACTIVE", after);
   });
 });
