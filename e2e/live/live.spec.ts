@@ -33,9 +33,26 @@ async function converge(pages: readonly Page[]): Promise<string> {
   return agreed;
 }
 
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Builds once on one of this player's deeds if the rules allow it; true when it did. */
+async function build(page: Page, name: string): Promise<boolean> {
+  const mine = page.getByRole("button", { name: new RegExp(", owned by " + escape(name) + "(,|$)") });
+  for (let index = 0; index < await mine.count(); index += 1) {
+    await mine.nth(index).click();
+    const button = page.getByRole("dialog", { name: /deed$/ }).getByRole("button", { name: /^Build/ });
+    const canBuild = await button.isVisible() && await button.isEnabled();
+    if (canBuild) await button.click();
+    // Close the deed panel before the next tile: it sits over the board's top-left corner.
+    await page.keyboard.press("Escape");
+    if (canBuild) return true;
+  }
+  return false;
+}
+
 /** One legal action by whichever client the rules are waiting on. */
-async function act(pages: readonly Page[]): Promise<boolean> {
-  for (const page of pages) {
+async function act(pages: readonly Page[], names: readonly string[]): Promise<boolean> {
+  for (const [index, page] of pages.entries()) {
     const confirm = page.getByRole("alertdialog").getByRole("button", { name: "Declare bankruptcy" });
     if (await confirm.isVisible()) {
       await confirm.click();
@@ -65,6 +82,8 @@ async function act(pages: readonly Page[]): Promise<boolean> {
     const turn = page.getByRole("region", { name: "Turn" });
     const primary = turn.locator(".btn-primary");
     if (await primary.isVisible() && await primary.isEnabled()) {
+      // Develop before ending the turn, so rents grow and a full match can finish.
+      if (FULL && (await primary.innerText()).trim() === "End turn" && await build(page, names[index] as string)) return true;
       await primary.click();
       return true;
     }
@@ -85,7 +104,11 @@ test(`${PLAYERS} browsers play one live match and stay converged`, async ({ brow
   await expect(host).toHaveURL(/\/r\/[A-Z0-9]+$/);
   const code = host.url().split("/r/")[1] as string;
   const pages = [host];
-  for (let index = 1; index < PLAYERS; index += 1) pages.push(await signIn(browser, "Player " + index, code));
+  const names = ["Host"];
+  for (let index = 1; index < PLAYERS; index += 1) {
+    names.push("Player " + index);
+    pages.push(await signIn(browser, "Player " + index, code));
+  }
   for (const page of pages) await expect(page.getByText("Room settings")).toBeVisible();
   await expect(host.locator(".player-row")).toHaveCount(PLAYERS);
 
@@ -104,11 +127,11 @@ test(`${PLAYERS} browsers play one live match and stay converged`, async ({ brow
   let idle = 0;
   while (actions < ACTIONS) {
     if (await host.getByRole("dialog", { name: "Final standings" }).isVisible()) break;
-    if (await act(pages)) {
+    if (await act(pages, names)) {
       actions += 1;
       idle = 0;
-      const next = await converge(pages);
-      print = next;
+      print = await converge(pages);
+      if (actions % 100 === 0) console.log("live: " + actions + " actions, all clients at " + print);
     } else {
       idle += 1;
       expect(idle, "no client could act at " + print).toBeLessThan(40);

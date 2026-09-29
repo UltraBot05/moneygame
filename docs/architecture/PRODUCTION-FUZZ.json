@@ -1,0 +1,97 @@
+{
+  "schema": "production-fuzz/1",
+  "seedsPerConfiguration": 100,
+  "configurations": [
+    {
+      "boardRef": "world-tour-standard@1",
+      "players": 3,
+      "seeds": 100,
+      "finished": 50,
+      "accepted": 174763,
+      "refused": 61636,
+      "malformed": 3310,
+      "duplicates": 3699
+    },
+    {
+      "boardRef": "world-tour-standard@1",
+      "players": 4,
+      "seeds": 100,
+      "finished": 21,
+      "accepted": 240749,
+      "refused": 86588,
+      "malformed": 4353,
+      "duplicates": 5074
+    },
+    {
+      "boardRef": "world-tour-standard@1",
+      "players": 5,
+      "seeds": 100,
+      "finished": 25,
+      "accepted": 235824,
+      "refused": 84295,
+      "malformed": 4369,
+      "duplicates": 4930
+    },
+    {
+      "boardRef": "world-tour-standard@1",
+      "players": 6,
+      "seeds": 100,
+      "finished": 19,
+      "accepted": 247178,
+      "refused": 89417,
+      "malformed": 4709,
+      "duplicates": 5150
+    },
+    {
+      "boardRef": "world-tour-grand@1",
+      "players": 6,
+      "seeds": 100,
+      "finished": 38,
+      "accepted": 227918,
+      "refused": 82130,
+      "malformed": 4390,
+      "duplicates": 4874
+    },
+    {
+      "boardRef": "world-tour-grand@1",
+      "players": 7,
+      "seeds": 100,
+      "finished": 30,
+      "accepted": 239314,
+      "refused": 86981,
+      "malformed": 4670,
+      "duplicates": 4919
+    },
+    {
+      "boardRef": "world-tour-grand@1",
+      "players": 8,
+      "seeds": 100,
+      "finished": 26,
+      "accepted": 249034,
+      "refused": 90376,
+      "malformed": 4893,
+      "duplicates": 5254
+    },
+    {
+      "boardRef": "world-tour-grand@1",
+      "players": 9,
+      "seeds": 100,
+      "finished": 11,
+      "accepted": 268013,
+      "refused": 97476,
+      "malformed": 5249,
+      "duplicates": 5531
+    },
+    {
+      "boardRef": "world-tour-grand@1",
+      "players": 10,
+      "seeds": 100,
+      "finished": 14,
+      "accepted": 268115,
+      "refused": 97503,
+      "malformed": 5097,
+      "duplicates": 5588
+    }
+  ],
+  "failures": []
+}

@@ -9,7 +9,8 @@ export default defineConfig({
   testDir: "./e2e/live",
   retries: 0,
   timeout: 10 * 60_000,
-  use: { baseURL: "http://127.0.0.1:8787" },
+  // A blocked click should fail the run quickly, not wait for the whole test timeout.
+  use: { baseURL: "http://127.0.0.1:8787", actionTimeout: 15_000 },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   webServer: {
     command: "pnpm --filter @moneygame/worker exec wrangler dev --port 8787 --ip 127.0.0.1"

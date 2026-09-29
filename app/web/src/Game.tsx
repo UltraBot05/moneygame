@@ -598,6 +598,8 @@ export function Feed({ snapshot, client, board, room, spectator }: {
   const [tab, setTab] = useState<"chat" | "log">("chat");
   const [text, setText] = useState("");
   const [seenChat, setSeenChat] = useState(0);
+  // Frames are not queued while reconnecting, so the composer waits for the connection.
+  const offline = snapshot.status !== "OPEN";
   const names = (userId: string) => nameOf(room, userId);
   const logLines = board === null ? [] : snapshot.events.flatMap((entry) => describeEvent(entry.event, entry.game, board, names).map((line, index) => ({ key: entry.id + ":" + index, line })));
   const unread = tab === "chat" ? 0 : snapshot.chat.length - seenChat;
@@ -643,8 +645,9 @@ export function Feed({ snapshot, client, board, room, spectator }: {
       {tab === "chat" && !spectator && (
         <form className="composer" onSubmit={(event) => { event.preventDefault(); send(); }}>
           <label className="visually-hidden" htmlFor="chat-input">Message</label>
-          <input id="chat-input" value={text} maxLength={280} placeholder="Message the room…" onChange={(event) => setText(event.target.value)} />
-          <button type="submit">Send</button>
+          <input id="chat-input" value={text} maxLength={280} placeholder={offline ? "Reconnecting…" : "Message the room…"} disabled={offline}
+            onChange={(event) => setText(event.target.value)} />
+          <button type="submit" disabled={offline}>Send</button>
         </form>
       )}
     </section>
