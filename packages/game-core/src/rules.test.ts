@@ -129,6 +129,10 @@ describe("RULE-020 match settings contract", () => {
         matchMode: "TEAMS",
         winMode: "LAST_STANDING",
         startingCash: 2500,
+        teams: [
+          { teamId: "north", memberUserIds: [players[0], players[2]] },
+          { teamId: "south", memberUserIds: [players[1]] },
+        ],
       }),
       context(players[0]!),
     )).state;
@@ -138,6 +142,10 @@ describe("RULE-020 match settings contract", () => {
       winMode: "LAST_STANDING",
       startingCash: 2500,
       pacing: "CORE",
+      teams: [
+        { teamId: "north", memberUserIds: [players[0], players[2]] },
+        { teamId: "south", memberUserIds: [players[1]] },
+      ],
     });
     expect(configured.players.every((player) => player.cash === 2500)).toBe(true);
     expect(parseGameState(JSON.parse(JSON.stringify(configured)), board)).toEqual(configured);
@@ -148,7 +156,7 @@ describe("RULE-020 match settings contract", () => {
     expect(applyGameplayCommand(
       active,
       command("CONFIGURE_MATCH", "late", active.gameVersion, {
-        matchMode: "FFA", winMode: "LAST_STANDING", startingCash: 2000,
+        matchMode: "FFA", winMode: "LAST_STANDING", startingCash: 2000, teams: [],
       }),
       context(players[0]!),
     )).toMatchObject({ kind: "REJECTED", reason: "SETTINGS_LOCKED", state: active });
@@ -157,20 +165,50 @@ describe("RULE-020 match settings contract", () => {
     expect(() => applyGameplayCommand(
       state,
       command("CONFIGURE_MATCH", "unsupported", state.gameVersion, {
-        matchMode: "COOPERATIVE", winMode: "LAST_STANDING", startingCash: 2000,
+        matchMode: "COOPERATIVE", winMode: "LAST_STANDING", startingCash: 2000, teams: [],
       }),
       context(players[0]!),
     )).toThrow(CommandValidationError);
     expect(() => applyGameplayCommand(
       state,
       command("CONFIGURE_MATCH", "design-toggle", state.gameVersion, {
-        matchMode: "FFA", winMode: "LAST_STANDING", startingCash: 2000, turbo: true,
+        matchMode: "FFA", winMode: "LAST_STANDING", startingCash: 2000, teams: [], turbo: true,
       }),
       context(players[0]!),
     )).toThrow(/unexpected field/);
     expect(() => createInitialGameState({
       gameId: "too-few", board, playerIds: players.slice(0, 2),
     })).toThrow(/TOO_FEW_PLAYERS/);
+  });
+
+  it("requires TEAMS to partition every player into two or more teams, and FFA to have none", () => {
+    const state = initial();
+    const configure = (matchMode: string, teams: unknown) => () => applyGameplayCommand(
+      state,
+      command("CONFIGURE_MATCH", "teams-" + matchMode, state.gameVersion, {
+        matchMode, winMode: "LAST_STANDING", startingCash: 2000, teams,
+      }),
+      context(players[0]!),
+    );
+    const everyone = [{ teamId: "all", memberUserIds: [...players] }];
+    expect(configure("TEAMS", everyone)).toThrow(/at least two teams/);
+    expect(configure("TEAMS", [
+      { teamId: "a", memberUserIds: [players[0]] },
+      { teamId: "b", memberUserIds: [players[1]] },
+    ])).toThrow(/exactly one team/);
+    expect(configure("TEAMS", [
+      { teamId: "a", memberUserIds: [players[0], players[1]] },
+      { teamId: "b", memberUserIds: [players[1], players[2]] },
+    ])).toThrow(/exactly one team/);
+    expect(configure("TEAMS", [
+      { teamId: "a", memberUserIds: [players[0]] },
+      { teamId: "a", memberUserIds: [players[1], players[2]] },
+    ])).toThrow(/duplicate teamId/);
+    expect(configure("TEAMS", [
+      { teamId: "a", memberUserIds: [] },
+      { teamId: "b", memberUserIds: [...players] },
+    ])).toThrow(/at least one player/);
+    expect(configure("FFA", everyone)).toThrow(/FFA matches have no teams/);
   });
 });
 

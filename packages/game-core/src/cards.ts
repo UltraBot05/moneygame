@@ -3,6 +3,8 @@ import type { CardDeck } from "./economy";
 
 export type HeldCardCapability = "DETENTION_RELEASE";
 export type EffectTarget = "CURRENT_PLAYER" | "EACH_OTHER_PLAYER" | "EACH_PLAYER";
+/** How rent is charged when movement lands on another player's asset. */
+export type LandingRent = "STANDARD" | "DOUBLE" | "TEN_TIMES_FRESH_ROLL";
 
 interface EffectIdentity {
   readonly effectId: string;
@@ -20,6 +22,14 @@ export type EffectDefinition =
       readonly collectStart: boolean;
     })
   | (EffectIdentity & { readonly type: "MOVE_BY"; readonly offset: number })
+  | (EffectIdentity & {
+      readonly type: "MOVE_TO_NEAREST";
+      readonly assetKind: "TRANSIT" | "UTILITY";
+      readonly collectStart: boolean;
+      readonly rent: LandingRent;
+    })
+  | (EffectIdentity & { readonly type: "PAY_EACH_OTHER_PLAYER"; readonly amount: number })
+  | (EffectIdentity & { readonly type: "COLLECT_PER_OWNED_PROPERTY"; readonly amount: number })
   | (EffectIdentity & { readonly type: "DRAW_CARD"; readonly deckId: CardDeck })
   | (EffectIdentity & { readonly type: "SEQUENCE"; readonly effectIds: readonly string[] })
   | (EffectIdentity & { readonly type: "ENTER_DETENTION" })
@@ -27,14 +37,18 @@ export type EffectDefinition =
       readonly type: "REPAIR_OWNED_ASSETS";
       readonly perProperty: number;
       readonly perDevelopmentLevel: number;
+      /** A landmark (level 4) is charged this instead of four development levels. */
+      readonly perLandmark: number;
     });
 
-export interface CardDefinition {
+/** A card either runs one effect when drawn, or is kept for its capability and runs nothing. */
+export type CardDefinition = {
   readonly cardId: string;
   readonly deckId: CardDeck;
-  readonly effectId: string;
-  readonly heldCapability: HeldCardCapability | null;
-}
+} & (
+  | { readonly effectId: string; readonly heldCapability: null }
+  | { readonly effectId: null; readonly heldCapability: HeldCardCapability }
+);
 
 export interface DeckDefinition {
   readonly deckId: CardDeck;
@@ -124,17 +138,18 @@ function parseCard(value: unknown, index: number): CardDefinition {
   const path = "$.cards[" + index + "]";
   const object = objectAt(value, path);
   exactKeys(object, ["cardId", "deckId", "effectId", "heldCapability"], path);
-  const heldCapability = object.heldCapability === null
-    ? null
-    : object.heldCapability === "DETENTION_RELEASE"
-      ? object.heldCapability
-      : fail(path + ".heldCapability", "unknown held-card capability");
-  return {
+  const identity = {
     cardId: identifierAt(object.cardId, path + ".cardId"),
     deckId: deckIdAt(object.deckId, path + ".deckId"),
-    effectId: identifierAt(object.effectId, path + ".effectId"),
-    heldCapability,
   };
+  if (object.heldCapability === null) {
+    return { ...identity, effectId: identifierAt(object.effectId, path + ".effectId"), heldCapability: null };
+  }
+  if (object.heldCapability !== "DETENTION_RELEASE") {
+    fail(path + ".heldCapability", "unknown held-card capability");
+  }
+  if (object.effectId !== null) fail(path + ".effectId", "a held card runs no effect");
+  return { ...identity, effectId: null, heldCapability: object.heldCapability };
 }
 
 function parseEffect(value: unknown, index: number, board: BoardDefinition): EffectDefinition {
@@ -173,6 +188,30 @@ function parseEffect(value: unknown, index: number, board: BoardDefinition): Eff
       if (offset === 0) fail(path + ".offset", "movement offset must be non-zero");
       return { effectId, type: object.type, offset };
     }
+    case "MOVE_TO_NEAREST": {
+      exactKeys(object, ["effectId", "type", "assetKind", "collectStart", "rent"], path);
+      if (object.assetKind !== "TRANSIT" && object.assetKind !== "UTILITY") {
+        fail(path + ".assetKind", "expected TRANSIT or UTILITY");
+      }
+      if (object.rent !== "STANDARD" && object.rent !== "DOUBLE" && object.rent !== "TEN_TIMES_FRESH_ROLL") {
+        fail(path + ".rent", "unknown landing rent");
+      }
+      const tileType = object.assetKind === "TRANSIT" ? "transit" : "utility";
+      if (!board.economyProfile.tiles.some((tile) => tile.type === tileType)) {
+        fail(path + ".assetKind", "board has no such asset");
+      }
+      return {
+        effectId,
+        type: object.type,
+        assetKind: object.assetKind,
+        collectStart: booleanAt(object.collectStart, path + ".collectStart"),
+        rent: object.rent,
+      };
+    }
+    case "PAY_EACH_OTHER_PLAYER":
+    case "COLLECT_PER_OWNED_PROPERTY":
+      exactKeys(object, ["effectId", "type", "amount"], path);
+      return { effectId, type: object.type, amount: integerAt(object.amount, path + ".amount", 1) };
     case "DRAW_CARD":
       exactKeys(object, ["effectId", "type", "deckId"], path);
       return { effectId, type: object.type, deckId: deckIdAt(object.deckId, path + ".deckId") };
@@ -188,7 +227,7 @@ function parseEffect(value: unknown, index: number, board: BoardDefinition): Eff
       exactKeys(object, ["effectId", "type"], path);
       return { effectId, type: object.type };
     case "REPAIR_OWNED_ASSETS":
-      exactKeys(object, ["effectId", "type", "perProperty", "perDevelopmentLevel"], path);
+      exactKeys(object, ["effectId", "type", "perProperty", "perDevelopmentLevel", "perLandmark"], path);
       return {
         effectId,
         type: object.type,
@@ -198,6 +237,7 @@ function parseEffect(value: unknown, index: number, board: BoardDefinition): Eff
           path + ".perDevelopmentLevel",
           0,
         ),
+        perLandmark: integerAt(object.perLandmark, path + ".perLandmark", 0),
       };
     default:
       return fail(path + ".type", "unknown effect type");
@@ -220,7 +260,7 @@ function assertNoStaticEffectCycles(
       const deck = decks.find((candidate) => candidate.deckId === effect.deckId);
       const deterministicTargets = new Set(
         deck?.cardIds.map((cardId) => cardById.get(cardId)?.effectId).filter(
-          (effectId): effectId is string => effectId !== undefined,
+          (effectId): effectId is string => typeof effectId === "string",
         ),
       );
       edges.set(effect.effectId, deterministicTargets.size === 1 ? [...deterministicTargets] : []);
@@ -249,7 +289,7 @@ function assertTerminalMovement(effects: readonly EffectDefinition[]): void {
     const effect = byId.get(effectId);
     if (effect === undefined) return false;
     if (effect.type === "SEQUENCE") return effect.effectIds.some(openEnded);
-    return effect.type === "MOVE_TO_TILE" || effect.type === "MOVE_BY"
+    return effect.type === "MOVE_TO_TILE" || effect.type === "MOVE_BY" || effect.type === "MOVE_TO_NEAREST"
       || effect.type === "ENTER_DETENTION" || effect.type === "DRAW_CARD";
   };
   for (const effect of effects) {
@@ -326,7 +366,9 @@ export function parseCardCatalog(input: unknown, boardInput: BoardDefinition): C
     effectIds.add(effect.effectId);
   }
   for (const card of cards) {
-    if (!effectIds.has(card.effectId)) fail("$.cards", "unknown effect reference " + card.effectId);
+    if (card.effectId !== null && !effectIds.has(card.effectId)) {
+      fail("$.cards", "unknown effect reference " + card.effectId);
+    }
   }
   for (const effect of effects) {
     if (effect.type === "DRAW_CARD" && !deckIds.has(effect.deckId)) {

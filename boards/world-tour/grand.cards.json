@@ -1,0 +1,527 @@
+{
+  "decks": [
+    {
+      "deckId": "surprise",
+      "cardIds": [
+        "surprise:advance-start",
+        "surprise:go-to-holding",
+        "surprise:next-flight",
+        "surprise:next-train",
+        "surprise:customs-inspection",
+        "surprise:overbooked",
+        "surprise:currency-slide",
+        "surprise:street-repairs",
+        "surprise:advance-paris",
+        "surprise:speeding-fine",
+        "surprise:advance-rome",
+        "surprise:sponsor-festival",
+        "surprise:advance-heathrow",
+        "surprise:lost-luggage",
+        "surprise:diplomatic-pass",
+        "surprise:emergency-landing"
+      ]
+    },
+    {
+      "deckId": "treasure",
+      "cardIds": [
+        "treasure:tourism-grant",
+        "treasure:bank-error",
+        "treasure:heritage-grant",
+        "treasure:annual-dividend",
+        "treasure:rail-concession",
+        "treasure:insurance-payout",
+        "treasure:duty-refund",
+        "treasure:consulate-letter",
+        "treasure:tourism-boom",
+        "treasure:design-prize",
+        "treasure:mature-bond",
+        "treasure:sponsorship-deal",
+        "treasure:ticket-refund",
+        "treasure:tax-rebate",
+        "treasure:handler-tip",
+        "treasure:advance-start"
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "cardId": "surprise:advance-start",
+      "deckId": "surprise",
+      "effectId": "advance-start",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:go-to-holding",
+      "deckId": "surprise",
+      "effectId": "go-to-holding",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:next-flight",
+      "deckId": "surprise",
+      "effectId": "nearest-transit-double",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:next-train",
+      "deckId": "surprise",
+      "effectId": "nearest-transit-double",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:customs-inspection",
+      "deckId": "surprise",
+      "effectId": "pay-150",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:overbooked",
+      "deckId": "surprise",
+      "effectId": "back-3",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:currency-slide",
+      "deckId": "surprise",
+      "effectId": "currency-slide",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:street-repairs",
+      "deckId": "surprise",
+      "effectId": "street-repairs",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:advance-paris",
+      "deckId": "surprise",
+      "effectId": "advance-paris",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:speeding-fine",
+      "deckId": "surprise",
+      "effectId": "pay-100",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:advance-rome",
+      "deckId": "surprise",
+      "effectId": "advance-rome",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:sponsor-festival",
+      "deckId": "surprise",
+      "effectId": "pay-each-other-50",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:advance-heathrow",
+      "deckId": "surprise",
+      "effectId": "advance-heathrow",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:lost-luggage",
+      "deckId": "surprise",
+      "effectId": "pay-80",
+      "heldCapability": null
+    },
+    {
+      "cardId": "surprise:diplomatic-pass",
+      "deckId": "surprise",
+      "effectId": null,
+      "heldCapability": "DETENTION_RELEASE"
+    },
+    {
+      "cardId": "surprise:emergency-landing",
+      "deckId": "surprise",
+      "effectId": "nearest-utility-ten-times",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:tourism-grant",
+      "deckId": "treasure",
+      "effectId": "collect-200",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:bank-error",
+      "deckId": "treasure",
+      "effectId": "collect-150",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:heritage-grant",
+      "deckId": "treasure",
+      "effectId": "collect-100",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:annual-dividend",
+      "deckId": "treasure",
+      "effectId": "dividend-30",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:rail-concession",
+      "deckId": "treasure",
+      "effectId": "collect-120",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:insurance-payout",
+      "deckId": "treasure",
+      "effectId": "collect-100",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:duty-refund",
+      "deckId": "treasure",
+      "effectId": "collect-150",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:consulate-letter",
+      "deckId": "treasure",
+      "effectId": null,
+      "heldCapability": "DETENTION_RELEASE"
+    },
+    {
+      "cardId": "treasure:tourism-boom",
+      "deckId": "treasure",
+      "effectId": "everyone-collects-25",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:design-prize",
+      "deckId": "treasure",
+      "effectId": "collect-80",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:mature-bond",
+      "deckId": "treasure",
+      "effectId": "collect-250",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:sponsorship-deal",
+      "deckId": "treasure",
+      "effectId": "collect-180",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:ticket-refund",
+      "deckId": "treasure",
+      "effectId": "collect-60",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:tax-rebate",
+      "deckId": "treasure",
+      "effectId": "collect-90",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:handler-tip",
+      "deckId": "treasure",
+      "effectId": "collect-70",
+      "heldCapability": null
+    },
+    {
+      "cardId": "treasure:advance-start",
+      "deckId": "treasure",
+      "effectId": "advance-start",
+      "heldCapability": null
+    }
+  ],
+  "effects": [
+    {
+      "effectId": "advance-start",
+      "type": "MOVE_TO_TILE",
+      "tileIndex": 0,
+      "collectStart": true
+    },
+    {
+      "effectId": "go-to-holding",
+      "type": "ENTER_DETENTION"
+    },
+    {
+      "effectId": "nearest-transit-double",
+      "type": "MOVE_TO_NEAREST",
+      "assetKind": "TRANSIT",
+      "collectStart": true,
+      "rent": "DOUBLE"
+    },
+    {
+      "effectId": "nearest-utility-ten-times",
+      "type": "MOVE_TO_NEAREST",
+      "assetKind": "UTILITY",
+      "collectStart": true,
+      "rent": "TEN_TIMES_FRESH_ROLL"
+    },
+    {
+      "effectId": "back-3",
+      "type": "MOVE_BY",
+      "offset": -3
+    },
+    {
+      "effectId": "currency-slide",
+      "type": "REPAIR_OWNED_ASSETS",
+      "perProperty": 40,
+      "perDevelopmentLevel": 0,
+      "perLandmark": 0
+    },
+    {
+      "effectId": "street-repairs",
+      "type": "REPAIR_OWNED_ASSETS",
+      "perProperty": 0,
+      "perDevelopmentLevel": 40,
+      "perLandmark": 115
+    },
+    {
+      "effectId": "advance-paris",
+      "type": "MOVE_TO_TILE",
+      "tileIndex": 33,
+      "collectStart": true
+    },
+    {
+      "effectId": "advance-rome",
+      "type": "MOVE_TO_TILE",
+      "tileIndex": 27,
+      "collectStart": true
+    },
+    {
+      "effectId": "advance-heathrow",
+      "type": "MOVE_TO_TILE",
+      "tileIndex": 6,
+      "collectStart": true
+    },
+    {
+      "effectId": "pay-each-other-50",
+      "type": "PAY_EACH_OTHER_PLAYER",
+      "amount": 50
+    },
+    {
+      "effectId": "dividend-30",
+      "type": "COLLECT_PER_OWNED_PROPERTY",
+      "amount": 30
+    },
+    {
+      "effectId": "everyone-collects-25",
+      "type": "ADJUST_CASH",
+      "target": "EACH_PLAYER",
+      "amount": 25
+    },
+    {
+      "effectId": "pay-150",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": -150
+    },
+    {
+      "effectId": "pay-100",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": -100
+    },
+    {
+      "effectId": "pay-80",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": -80
+    },
+    {
+      "effectId": "collect-250",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 250
+    },
+    {
+      "effectId": "collect-200",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 200
+    },
+    {
+      "effectId": "collect-180",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 180
+    },
+    {
+      "effectId": "collect-150",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 150
+    },
+    {
+      "effectId": "collect-120",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 120
+    },
+    {
+      "effectId": "collect-100",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 100
+    },
+    {
+      "effectId": "collect-90",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 90
+    },
+    {
+      "effectId": "collect-80",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 80
+    },
+    {
+      "effectId": "collect-70",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 70
+    },
+    {
+      "effectId": "collect-60",
+      "type": "ADJUST_CASH",
+      "target": "CURRENT_PLAYER",
+      "amount": 60
+    }
+  ],
+  "copy": {
+    "surprise:advance-start": {
+      "title": "Advance to START",
+      "text": "Move forward to START and collect the landing bonus."
+    },
+    "surprise:go-to-holding": {
+      "title": "Go to Holding",
+      "text": "Go directly to Holding. Do not pass START and do not collect a salary."
+    },
+    "surprise:next-flight": {
+      "title": "Take the next flight",
+      "text": "Advance to the nearest transit hub. If it is unowned you may buy it; otherwise pay its owner double rent."
+    },
+    "surprise:next-train": {
+      "title": "Board the next train",
+      "text": "Advance to the nearest transit hub. If it is unowned you may buy it; otherwise pay its owner double rent."
+    },
+    "surprise:customs-inspection": {
+      "title": "Customs inspection",
+      "text": "Your baggage is opened and reweighed. Pay $150 in duty."
+    },
+    "surprise:overbooked": {
+      "title": "Overbooked",
+      "text": "Go back three tiles and settle whatever you land on."
+    },
+    "surprise:currency-slide": {
+      "title": "Currency slide",
+      "text": "The exchange rate moves against you. Pay $40 for every city you own."
+    },
+    "surprise:street-repairs": {
+      "title": "Street repairs",
+      "text": "Pay $40 for every development block you own and $115 for every landmark."
+    },
+    "surprise:advance-paris": {
+      "title": "Advance to Paris",
+      "text": "Take the scenic route to Paris. Collect your salary if you pass START."
+    },
+    "surprise:speeding-fine": {
+      "title": "Speeding fine",
+      "text": "You were caught between terminals. Pay a $100 fine."
+    },
+    "surprise:advance-rome": {
+      "title": "Advance to Rome",
+      "text": "A detour through Rome. Collect your salary if you pass START."
+    },
+    "surprise:sponsor-festival": {
+      "title": "Sponsor a festival",
+      "text": "Pay every other player $50. Everyone remembers you fondly."
+    },
+    "surprise:advance-heathrow": {
+      "title": "Advance to Heathrow",
+      "text": "Rebooked through Heathrow. Collect your salary if you pass START."
+    },
+    "surprise:lost-luggage": {
+      "title": "Lost luggage",
+      "text": "Replace what was in the case. Pay the bank $80."
+    },
+    "surprise:diplomatic-pass": {
+      "title": "Diplomatic pass",
+      "text": "Keep this card. Use it once to leave Holding for free."
+    },
+    "surprise:emergency-landing": {
+      "title": "Emergency landing",
+      "text": "Advance to the nearest utility. If it is owned, roll the dice and pay its owner ten times the roll."
+    },
+    "treasure:tourism-grant": {
+      "title": "Tourism board grant",
+      "text": "The season went well. Collect $200 from the bank."
+    },
+    "treasure:bank-error": {
+      "title": "Bank error in your favour",
+      "text": "An old transfer clears twice. Collect $150."
+    },
+    "treasure:heritage-grant": {
+      "title": "Heritage grant",
+      "text": "Your restoration work is recognised. Collect $100."
+    },
+    "treasure:annual-dividend": {
+      "title": "Annual dividend",
+      "text": "Collect $30 for every city you own."
+    },
+    "treasure:rail-concession": {
+      "title": "Rail concession",
+      "text": "A route through your holdings pays a licence fee. Collect $120."
+    },
+    "treasure:insurance-payout": {
+      "title": "Insurance payout",
+      "text": "A claim you had forgotten about settles. Collect $100."
+    },
+    "treasure:duty-refund": {
+      "title": "Duty refund",
+      "text": "A customs charge is reversed. Collect $150."
+    },
+    "treasure:consulate-letter": {
+      "title": "Consulate letter",
+      "text": "Keep this card. Use it once to leave Holding for free."
+    },
+    "treasure:tourism-boom": {
+      "title": "Tourism boom",
+      "text": "Visitors flood the board. Every player collects $25 from the bank."
+    },
+    "treasure:design-prize": {
+      "title": "Won a design prize",
+      "text": "Your terminal renovation wins an award. Collect $80."
+    },
+    "treasure:mature-bond": {
+      "title": "Mature bond",
+      "text": "A long bond finally matures. Collect $250."
+    },
+    "treasure:sponsorship-deal": {
+      "title": "Sponsorship deal",
+      "text": "A carrier pays to put its name on your routes. Collect $180."
+    },
+    "treasure:ticket-refund": {
+      "title": "Unused ticket refund",
+      "text": "A cancelled trip is refunded. Collect $60."
+    },
+    "treasure:tax-rebate": {
+      "title": "Property tax rebate",
+      "text": "The council overcharged you last quarter. Collect $90."
+    },
+    "treasure:handler-tip": {
+      "title": "Baggage handler's tip",
+      "text": "A quiet word about an upcoming route pays off. Collect $70."
+    },
+    "treasure:advance-start": {
+      "title": "Advance to START",
+      "text": "Move forward to START and collect the landing bonus."
+    }
+  }
+}

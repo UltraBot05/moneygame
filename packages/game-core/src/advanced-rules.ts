@@ -1,10 +1,10 @@
 import type { BoardDefinition } from "./board";
-import type { CardCatalogDefinition, CardDefinition, HeldCardCapability } from "./cards";
+import type { CardCatalogDefinition, CardDefinition, HeldCardCapability, LandingRent } from "./cards";
 import type { DiceRoll } from "./dice";
 import type { CardDeck } from "./economy";
 import { calculateMovement } from "./movement";
 import { shuffle, type RandomSource } from "./random";
-import type { AssetState, PlayerState } from "./state";
+import type { AssetState, ObligationCreditor, PlayerState } from "./state";
 
 export const MAX_RESOLUTION_STEPS = 16;
 
@@ -23,7 +23,9 @@ export interface HeldCardState {
 
 export type EffectFrame =
   | { readonly type: "EFFECT"; readonly effectId: string }
-  | { readonly type: "DRAW_CARD"; readonly deckId: CardDeck };
+  | { readonly type: "DRAW_CARD"; readonly deckId: CardDeck }
+  /** One creditor per frame, so a shortfall suspends against exactly one player. */
+  | { readonly type: "PAY_PLAYER"; readonly effectId: string; readonly userId: string; readonly amount: number };
 
 /** Everything needed to resume a suspended effect chain after reconstruction. */
 export interface EffectContinuationState {
@@ -55,7 +57,8 @@ export interface TradeState {
   readonly liquidationFor: string | null;
 }
 
-export type TradeFactType = "PROPOSED" | "COUNTERED" | "ACCEPTED" | "REJECTED" | "CANCELLED";
+/** VOIDED: closed by the rules because a participant was eliminated. */
+export type TradeFactType = "PROPOSED" | "COUNTERED" | "ACCEPTED" | "REJECTED" | "CANCELLED" | "VOIDED";
 
 /** Neutral authoritative trade history for later integrity analysis. Never a judgement. */
 export interface TradeFact {
@@ -72,11 +75,32 @@ export interface TradeFact {
   readonly actionId: string;
 }
 
-/** Deadline + handoff metadata for the CORE-011 obligation, which remains the debt truth. */
+/** Deadline metadata for the CORE-011 obligation, which remains the debt truth. */
 export interface DebtRuleState {
   readonly resolutionId: string;
   readonly deadlineAt: number;
-  readonly bankruptcyRequired: boolean;
+}
+
+/** Neutral bankruptcy record: who went out, to whom, and exactly what moved. */
+export interface EliminationFact {
+  readonly userId: string;
+  readonly reason: "DECLARED" | "DEADLINE";
+  readonly creditor: ObligationCreditor;
+  readonly obligationAmount: number;
+  /** Debtor cash plus development sell-back proceeds, paid to the creditor (or the bank). */
+  readonly cashTransferred: number;
+  readonly assetIds: readonly string[];
+  readonly gameVersion: number;
+  readonly actionId: string;
+}
+
+export interface GameOutcome {
+  readonly reason: "LAST_STANDING";
+  readonly winnerUserIds: readonly string[];
+  readonly winningTeamId: string | null;
+  /** Every player, best first: survivors in seat order, then eliminations newest first. */
+  readonly placements: readonly string[];
+  readonly endedGameVersion: number;
 }
 
 export interface AdvancedRuleState {
@@ -86,6 +110,8 @@ export interface AdvancedRuleState {
   readonly trades: readonly TradeState[];
   readonly tradeFacts: readonly TradeFact[];
   readonly debt: DebtRuleState | null;
+  readonly eliminations: readonly EliminationFact[];
+  readonly outcome: GameOutcome | null;
 }
 
 export const EMPTY_ADVANCED_RULE_STATE: AdvancedRuleState = Object.freeze({
@@ -95,6 +121,8 @@ export const EMPTY_ADVANCED_RULE_STATE: AdvancedRuleState = Object.freeze({
   trades: Object.freeze([]),
   tradeFacts: Object.freeze([]),
   debt: null,
+  eliminations: Object.freeze([]),
+  outcome: null,
 });
 
 export class AdvancedRuleValidationError extends Error {
@@ -238,7 +266,7 @@ function parseTradeFact(value: unknown, index: number, context: AdvancedRulePars
   ], path);
   const type = item.type;
   if (type !== "PROPOSED" && type !== "COUNTERED" && type !== "ACCEPTED"
-    && type !== "REJECTED" && type !== "CANCELLED") {
+    && type !== "REJECTED" && type !== "CANCELLED" && type !== "VOIDED") {
     invalid(path + ".type", "unknown trade fact");
   }
   return {
@@ -253,8 +281,17 @@ function parseTradeFact(value: unknown, index: number, context: AdvancedRulePars
   };
 }
 
-function parseFrame(value: unknown, path: string): EffectFrame {
+function parseFrame(value: unknown, path: string, playerIds: ReadonlySet<string>): EffectFrame {
   const item = record(value, path);
+  if (item.type === "PAY_PLAYER") {
+    keys(item, ["type", "effectId", "userId", "amount"], path);
+    return {
+      type: "PAY_PLAYER",
+      effectId: id(item.effectId, path + ".effectId"),
+      userId: player(item.userId, path + ".userId", playerIds),
+      amount: integer(item.amount, path + ".amount", 1),
+    };
+  }
   if (item.type === "EFFECT") {
     keys(item, ["type", "effectId"], path);
     return { type: "EFFECT", effectId: id(item.effectId, path + ".effectId") };
@@ -284,7 +321,7 @@ function parseEffectContinuation(
     originTileIndex,
     remainingSteps,
     frames: array(item.frames, path + ".frames").map((frame, index) =>
-      parseFrame(frame, path + ".frames[" + index + "]"),
+      parseFrame(frame, path + ".frames[" + index + "]", context.playerIds),
     ),
     roll: context.parseRoll(item.roll, path + ".roll"),
   };
@@ -294,14 +331,68 @@ function parseDebt(value: unknown): DebtRuleState | null {
   if (value === null) return null;
   const path = "$.ruleState.debt";
   const item = record(value, path);
-  keys(item, ["resolutionId", "deadlineAt", "bankruptcyRequired"], path);
-  if (item.bankruptcyRequired !== true && item.bankruptcyRequired !== false) {
-    invalid(path + ".bankruptcyRequired", "expected a boolean");
-  }
+  keys(item, ["resolutionId", "deadlineAt"], path);
   return {
     resolutionId: id(item.resolutionId, path + ".resolutionId"),
     deadlineAt: integer(item.deadlineAt, path + ".deadlineAt"),
-    bankruptcyRequired: item.bankruptcyRequired,
+  };
+}
+
+function parseCreditor(value: unknown, path: string, playerIds: ReadonlySet<string>): ObligationCreditor {
+  const item = record(value, path);
+  if (item.type === "BANK") {
+    keys(item, ["type"], path);
+    return { type: "BANK" };
+  }
+  if (item.type === "PLAYER") {
+    keys(item, ["type", "userId"], path);
+    return { type: "PLAYER", userId: player(item.userId, path + ".userId", playerIds) };
+  }
+  return invalid(path + ".type", "unknown creditor");
+}
+
+function parseElimination(value: unknown, index: number, context: AdvancedRuleParseContext): EliminationFact {
+  const path = "$.ruleState.eliminations[" + index + "]";
+  const item = record(value, path);
+  keys(item, [
+    "userId", "reason", "creditor", "obligationAmount", "cashTransferred", "assetIds", "gameVersion", "actionId",
+  ], path);
+  if (item.reason !== "DECLARED" && item.reason !== "DEADLINE") invalid(path + ".reason", "unknown reason");
+  const assetIds = stringList(item.assetIds, path + ".assetIds");
+  for (const assetId of assetIds) {
+    if (!context.assetIds.has(assetId)) invalid(path + ".assetIds", "unknown asset " + assetId);
+  }
+  return {
+    userId: player(item.userId, path + ".userId", context.playerIds),
+    reason: item.reason,
+    creditor: parseCreditor(item.creditor, path + ".creditor", context.playerIds),
+    obligationAmount: integer(item.obligationAmount, path + ".obligationAmount", 1),
+    cashTransferred: integer(item.cashTransferred, path + ".cashTransferred"),
+    assetIds,
+    gameVersion: integer(item.gameVersion, path + ".gameVersion", 1),
+    actionId: id(item.actionId, path + ".actionId"),
+  };
+}
+
+function parseOutcome(value: unknown, context: AdvancedRuleParseContext): GameOutcome | null {
+  if (value === null) return null;
+  const path = "$.ruleState.outcome";
+  const item = record(value, path);
+  keys(item, ["reason", "winnerUserIds", "winningTeamId", "placements", "endedGameVersion"], path);
+  if (item.reason !== "LAST_STANDING") invalid(path + ".reason", "unknown outcome");
+  const winnerUserIds = stringList(item.winnerUserIds, path + ".winnerUserIds");
+  const placements = stringList(item.placements, path + ".placements");
+  if (winnerUserIds.length === 0) invalid(path + ".winnerUserIds", "an outcome needs a winner");
+  for (const userId of winnerUserIds) player(userId, path + ".winnerUserIds", context.playerIds);
+  if (placements.length !== context.playerIds.size || placements.some((userId) => !context.playerIds.has(userId))) {
+    invalid(path + ".placements", "must rank every player exactly once");
+  }
+  return {
+    reason: item.reason,
+    winnerUserIds,
+    winningTeamId: nullableId(item.winningTeamId, path + ".winningTeamId"),
+    placements,
+    endedGameVersion: integer(item.endedGameVersion, path + ".endedGameVersion", 1),
   };
 }
 
@@ -330,6 +421,17 @@ function freezeRuleState(state: AdvancedRuleState): AdvancedRuleState {
   }
   state.trades.forEach(freezeTrade);
   state.tradeFacts.forEach(freezeTrade);
+  state.eliminations.forEach((fact) => {
+    Object.freeze(fact.creditor);
+    Object.freeze(fact.assetIds);
+    Object.freeze(fact);
+  });
+  Object.freeze(state.eliminations);
+  if (state.outcome !== null) {
+    Object.freeze(state.outcome.winnerUserIds);
+    Object.freeze(state.outcome.placements);
+    Object.freeze(state.outcome);
+  }
   Object.freeze(state.decks);
   Object.freeze(state.heldCards);
   Object.freeze(state.trades);
@@ -343,7 +445,9 @@ export function parseAdvancedRuleState(
   context: AdvancedRuleParseContext,
 ): AdvancedRuleState {
   const root = record(value, "$.ruleState");
-  keys(root, ["decks", "heldCards", "effectContinuation", "trades", "tradeFacts", "debt"], "$.ruleState");
+  keys(root, [
+    "decks", "heldCards", "effectContinuation", "trades", "tradeFacts", "debt", "eliminations", "outcome",
+  ], "$.ruleState");
   const decks = array(root.decks, "$.ruleState.decks").map((value, index): DeckState => {
     const path = "$.ruleState.decks[" + index + "]";
     const item = record(value, path);
@@ -391,6 +495,10 @@ export function parseAdvancedRuleState(
       parseTradeFact(fact, index, context),
     ),
     debt: parseDebt(root.debt),
+    eliminations: array(root.eliminations, "$.ruleState.eliminations").map((fact, index) =>
+      parseElimination(fact, index, context),
+    ),
+    outcome: parseOutcome(root.outcome, context),
   });
 }
 
@@ -429,7 +537,7 @@ export function validateAdvancedRuleStateCatalog(
   if (state.effectContinuation !== null) {
     const effectIds = new Set(catalog.effects.map((effect) => effect.effectId));
     for (const frame of state.effectContinuation.frames) {
-      if (frame.type === "EFFECT" && !effectIds.has(frame.effectId)) {
+      if (frame.type !== "DRAW_CARD" && !effectIds.has(frame.effectId)) {
         invalid("$.ruleState.effectContinuation.frames", "unknown effect");
       }
     }
@@ -511,7 +619,7 @@ export function returnHeldCard(
 }
 
 export type EffectTerminal =
-  | { readonly type: "LAND"; readonly tileIndex: number }
+  | { readonly type: "LAND"; readonly tileIndex: number; readonly rent: LandingRent }
   | { readonly type: "ENTER_HOLDING" };
 
 export interface EffectDiagnostic {
@@ -535,6 +643,7 @@ export type EffectRunResult =
       readonly ruleState: AdvancedRuleState;
       readonly effectId: string;
       readonly amount: number;
+      readonly creditor: ObligationCreditor;
       readonly frames: readonly EffectFrame[];
       readonly remainingSteps: number;
       readonly drawnCardIds: readonly string[];
@@ -592,12 +701,17 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
     });
   const completed = (terminal: EffectTerminal | null): EffectRunResult =>
     Object.freeze({ kind: "COMPLETED", players, ruleState, terminal, drawnCardIds: Object.freeze(drawnCardIds) });
-  const suspend = (effectId: string, amount: number): EffectRunResult => Object.freeze({
+  const suspend = (
+    effectId: string,
+    amount: number,
+    creditor: ObligationCreditor = { type: "BANK" },
+  ): EffectRunResult => Object.freeze({
     kind: "SUSPENDED",
     players,
     ruleState,
     effectId,
     amount,
+    creditor,
     frames: Object.freeze(frames.slice()),
     remainingSteps,
     drawnCardIds: Object.freeze(drawnCardIds),
@@ -608,7 +722,12 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
     drawnCardIds.push(drawn.card.cardId);
     if (drawn.card.heldCapability === null) frames.push({ type: "EFFECT", effectId: drawn.card.effectId });
   };
-  const land = (frame: EffectFrame, to: number, startAward: number): EffectRunResult | null => {
+  const land = (
+    frame: EffectFrame,
+    to: number,
+    startAward: number,
+    rent: LandingRent = "STANDARD",
+  ): EffectRunResult | null => {
     updateActor({ position: to, cash: checkedCash(actor().cash + startAward) });
     const tile = input.board.economyProfile.tiles[to];
     if (tile?.type === "card") {
@@ -616,7 +735,7 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
       return null;
     }
     if (frames.length > 0) return failed("NON_TERMINAL_MOVEMENT", frame);
-    return completed({ type: "LAND", tileIndex: to });
+    return completed({ type: "LAND", tileIndex: to, rent });
   };
 
   while (frames.length > 0) {
@@ -626,6 +745,17 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
 
     if (frame.type === "DRAW_CARD") {
       draw(frame.deckId);
+      continue;
+    }
+    if (frame.type === "PAY_PLAYER") {
+      if (actor().cash < frame.amount) {
+        return suspend(frame.effectId, frame.amount, { type: "PLAYER", userId: frame.userId });
+      }
+      players = players.map((candidate) => {
+        if (candidate.userId === input.actorUserId) return { ...candidate, cash: candidate.cash - frame.amount };
+        if (candidate.userId === frame.userId) return { ...candidate, cash: checkedCash(candidate.cash + frame.amount) };
+        return candidate;
+      });
       continue;
     }
     const effect = effects.get(frame.effectId);
@@ -655,11 +785,31 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
         });
         break;
       }
-      case "REPAIR_OWNED_ASSETS": {
-        const amount = input.assets.reduce((total, asset) =>
+      case "PAY_EACH_OTHER_PLAYER": {
+        // Seat order after the actor; pushed reversed so the nearest seat is paid first.
+        const seat = players.findIndex((candidate) => candidate.userId === input.actorUserId);
+        const recipients = [...players.slice(seat + 1), ...players.slice(0, seat)]
+          .filter((candidate) => candidate.status === "ACTIVE");
+        for (const recipient of recipients.reverse()) {
+          frames.push({ type: "PAY_PLAYER", effectId: effect.effectId, userId: recipient.userId, amount: effect.amount });
+        }
+        break;
+      }
+      case "COLLECT_PER_OWNED_PROPERTY": {
+        const owned = input.assets.filter((asset) =>
           asset.kind === "PROPERTY" && asset.ownerUserId === input.actorUserId
-            ? total + effect.perProperty + asset.developmentLevel * effect.perDevelopmentLevel
-            : total, 0);
+        ).length;
+        updateActor({ cash: checkedCash(actor().cash + owned * effect.amount) });
+        break;
+      }
+      case "REPAIR_OWNED_ASSETS": {
+        const amount = input.assets.reduce((total, asset) => {
+          if (asset.kind !== "PROPERTY" || asset.ownerUserId !== input.actorUserId) return total;
+          const development = asset.developmentLevel === 4
+            ? effect.perLandmark
+            : asset.developmentLevel * effect.perDevelopmentLevel;
+          return total + effect.perProperty + development;
+        }, 0);
         if (!Number.isSafeInteger(amount)) throw new RangeError("repair charge exceeds safe integer range");
         if (actor().cash < amount) return suspend(effect.effectId, amount);
         updateActor({ cash: actor().cash - amount });
@@ -681,6 +831,17 @@ export function runEffectFrames(input: EffectRunInput): EffectRunResult {
         const to = (((from + effect.offset) % tileCount) + tileCount) % tileCount;
         const award = effect.offset > 0 ? calculateMovement(input.board, from, effect.offset).startAward : 0;
         const landed = land(frame, to, award);
+        if (landed !== null) return landed;
+        break;
+      }
+      case "MOVE_TO_NEAREST": {
+        const from = actor().position;
+        const tileType = effect.assetKind === "TRANSIT" ? "transit" : "utility";
+        const tileCount = input.board.tileCount;
+        let distance = 1;
+        while (input.board.economyProfile.tiles[(from + distance) % tileCount]?.type !== tileType) distance += 1;
+        const award = effect.collectStart ? calculateMovement(input.board, from, distance).startAward : 0;
+        const landed = land(frame, (from + distance) % tileCount, award, effect.rent);
         if (landed !== null) return landed;
         break;
       }

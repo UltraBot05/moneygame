@@ -15,11 +15,18 @@ export type GamePhase = "STARTING" | "ACTIVE_TURN" | "GAME_OVER";
 export type MatchMode = "FFA" | "TEAMS";
 export type WinMode = "LAST_STANDING";
 
+export interface TeamDefinition {
+  readonly teamId: string;
+  readonly memberUserIds: readonly string[];
+}
+
 export interface MatchSettings {
   readonly matchMode: MatchMode;
   readonly winMode: WinMode;
   readonly startingCash: number;
   readonly pacing: "CORE";
+  /** Empty in FFA; in TEAMS a fixed partition of every player into two or more teams. */
+  readonly teams: readonly TeamDefinition[];
 }
 
 export interface GameBoardIdentity {
@@ -152,6 +159,7 @@ export interface CreateInitialGameStateInput {
   readonly startingCash?: number;
   readonly matchMode?: MatchMode;
   readonly winMode?: WinMode;
+  readonly teams?: readonly TeamDefinition[];
 }
 
 export class GameStateValidationError extends Error {
@@ -262,10 +270,44 @@ function parsePlayer(value: unknown, index: number, tileCount: number): PlayerSt
   };
 }
 
-function parseSettings(value: unknown): MatchSettings {
+export function parseTeams(
+  value: unknown,
+  matchMode: MatchMode,
+  playerIds: ReadonlySet<string>,
+): readonly TeamDefinition[] {
+  const path = "$.settings.teams";
+  const teams = arrayAt(value, path).map((entry, index): TeamDefinition => {
+    const teamPath = path + "[" + index + "]";
+    const object = objectAt(entry, teamPath);
+    exactKeys(object, ["teamId", "memberUserIds"], teamPath);
+    const memberUserIds = arrayAt(object.memberUserIds, teamPath + ".memberUserIds").map((member, memberIndex) =>
+      identifierAt(member, teamPath + ".memberUserIds[" + memberIndex + "]"),
+    );
+    if (memberUserIds.length === 0) fail(teamPath + ".memberUserIds", "a team needs at least one player");
+    return { teamId: identifierAt(object.teamId, teamPath + ".teamId"), memberUserIds };
+  });
+  if (matchMode === "FFA") {
+    if (teams.length !== 0) fail(path, "FFA matches have no teams");
+    return teams;
+  }
+  if (teams.length < 2) fail(path, "TEAMS matches need at least two teams");
+  if (new Set(teams.map((team) => team.teamId)).size !== teams.length) fail(path, "duplicate teamId");
+  const members = teams.flatMap((team) => team.memberUserIds);
+  if (members.length !== playerIds.size || new Set(members).size !== members.length
+    || members.some((userId) => !playerIds.has(userId))) {
+    fail(path, "every player must belong to exactly one team");
+  }
+  return teams;
+}
+
+export function teamOf(settings: MatchSettings, userId: string): string | null {
+  return settings.teams.find((team) => team.memberUserIds.includes(userId))?.teamId ?? null;
+}
+
+function parseSettings(value: unknown, playerIds: ReadonlySet<string>): MatchSettings {
   const path = "$.settings";
   const object = objectAt(value, path);
-  exactKeys(object, ["matchMode", "winMode", "startingCash", "pacing"], path);
+  exactKeys(object, ["matchMode", "winMode", "startingCash", "pacing", "teams"], path);
   const matchMode = object.matchMode === "FFA" || object.matchMode === "TEAMS"
     ? object.matchMode
     : fail(path + ".matchMode", "expected FFA or TEAMS");
@@ -277,7 +319,8 @@ function parseSettings(value: unknown): MatchSettings {
     fail(path + ".startingCash", "must be an integer from 1500 through 2500");
   }
   if (object.pacing !== "CORE") fail(path + ".pacing", "expected CORE");
-  return { matchMode, winMode, startingCash, pacing: object.pacing };
+  const teams = parseTeams(object.teams, matchMode, playerIds);
+  return { matchMode, winMode, startingCash, pacing: object.pacing, teams };
 }
 
 function ownableTiles(board: BoardDefinition) {
@@ -889,6 +932,11 @@ function freezeGameState(state: GameState): GameState {
   Object.freeze(state.players);
   Object.freeze(state.assets);
   Object.freeze(state.board);
+  state.settings.teams.forEach((team) => {
+    Object.freeze(team.memberUserIds);
+    Object.freeze(team);
+  });
+  Object.freeze(state.settings.teams);
   Object.freeze(state.settings);
   if (state.turn !== null) Object.freeze(state.turn);
   if (state.pendingResolution !== null) {
@@ -994,7 +1042,7 @@ export function parseGameState(
       ? root.phase
       : fail("$.phase", "unknown phase");
   const turn = parseTurn(root.turn, playerIds);
-  const settings = parseSettings(root.settings);
+  const settings = parseSettings(root.settings, playerIds);
   if (
     phase === "STARTING"
     && players.some((player) => player.cash !== settings.startingCash || player.status !== "ACTIVE")
@@ -1067,6 +1115,38 @@ export function parseGameState(
   for (const [index, player] of players.entries()) {
     if (player.inHolding && player.position !== holdingIndex) {
       fail("$.players[" + index + "].position", "a player in Holding must be on the Holding tile");
+    }
+  }
+  // Bankrupt players own nothing, hold nothing, and are recorded as eliminated exactly once.
+  const activeIds = new Set(players.filter((player) => player.status === "ACTIVE").map((player) => player.userId));
+  if (assets.some((asset) => asset.ownerUserId !== null && !activeIds.has(asset.ownerUserId))
+    || ruleState.heldCards.some((card) => !activeIds.has(card.ownerUserId))) {
+    fail("$", "only eligible players may own assets or hold cards");
+  }
+  const eliminated = ruleState.eliminations.map((fact) => fact.userId);
+  const bankrupt = players.filter((player) => player.status === "BANKRUPT").map((player) => player.userId);
+  if (new Set(eliminated).size !== eliminated.length
+    || eliminated.length !== bankrupt.length
+    || bankrupt.some((userId) => !eliminated.includes(userId))
+    || bankrupt.some((userId) => players.find((player) => player.userId === userId)?.cash !== 0)) {
+    fail("$.ruleState.eliminations", "every bankrupt player is eliminated exactly once with no cash");
+  }
+  const outcome = ruleState.outcome;
+  if ((phase === "GAME_OVER") !== (outcome !== null)) {
+    fail("$.ruleState.outcome", "an outcome exists exactly when the game is over");
+  }
+  if (outcome !== null) {
+    const expectedWinners = settings.matchMode === "TEAMS"
+      ? settings.teams.find((team) => team.teamId === outcome.winningTeamId)?.memberUserIds ?? []
+      : [...activeIds];
+    if (
+      (settings.matchMode === "FFA") !== (outcome.winningTeamId === null)
+      || (settings.matchMode === "FFA" && activeIds.size !== 1)
+      || [...activeIds].some((userId) => !expectedWinners.includes(userId))
+      || expectedWinners.length !== outcome.winnerUserIds.length
+      || expectedWinners.some((userId) => !outcome.winnerUserIds.includes(userId))
+    ) {
+      fail("$.ruleState.outcome", "winners must be the surviving player or team");
     }
   }
   if (pendingResolution?.kind === "DETENTION_FEE") {
@@ -1189,6 +1269,7 @@ export function createInitialGameState(input: CreateInitialGameStateInput): Game
       },
       settings: {
         matchMode: input.matchMode ?? "FFA",
+        teams: input.teams ?? [],
         winMode: input.winMode ?? "LAST_STANDING",
         startingCash,
         pacing: "CORE",

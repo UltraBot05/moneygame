@@ -28,7 +28,7 @@ The default $2,000 economy is the primary validated launch target. The $1,500 an
 
 The following are not frozen by implication:
 
-- final Surprise and Treasure content (RULE-011/012);
+- ~~final Surprise and Treasure content (RULE-011/012)~~ — v1 decks decided in section 10; values stay open for balance tuning;
 - ~~full Holding choices, attempts, and held release cards (RULE-013)~~ — decided in section 9, pending RULE-013 review;
 - human validation of two-development-per-turn snowball dynamics;
 - Grand human playtesting and human comparison of optional pacing ideas;
@@ -192,6 +192,49 @@ Decided by the product owner during Section D Pass D2 (RULE-009, 010, 013, 014, 
   - The debtor may only mortgage, sell development (even-sell, canonical 50% sell-back), or make liquidation trades created during that debt.
   - Open trades from before the debt that involve the debtor cannot be accepted while it is outstanding.
   - The obligation is paid automatically as soon as the debtor's cash covers it, and play resumes where it was interrupted (including a suspended card effect).
-- **Deadline expiry** only marks a bankruptcy handoff. The asset/cash transfer belongs to RULE-016/017.
+- **Deadline expiry** forces bankruptcy (section 10).
 
 These rules change cash flow compared with the ECON-001 bot's Holding approximation. The economy matrix must be rerun before final balance approval (GRAND-003/QA-015).
+
+## 10. Amendment — D3 and card-deck product decisions (2026-09-29)
+
+Decided by the product owner for RULE-011, 012, 016, 017, 018, and 019, following the section 8 process.
+
+### Card decks (RULE-011/012)
+
+- Canonical v1 decks are data, not code: `boards/world-tour/standard.cards.json` and `grand.cards.json`, loaded and validated by `packages/game-core/src/catalog.ts` together with their player-facing copy.
+- Each deck has 16 cards, and both boards carry the same cards. Only the Paris, Rome, and Heathrow destinations use board-specific tile indices.
+- Every deck holds exactly one Holding-release card. A held card runs no effect, and every deck keeps at least one card that cannot be held.
+- New effect primitives:
+  - move to the nearest transit hub or utility, with standard, double, or ten-times-a-fresh-roll rent;
+  - pay each other player, charged one creditor at a time in seat order;
+  - a landmark rate for repairs;
+  - a per-city payout.
+- Card values are launch placeholders. The economy matrix must be rerun on the production rule path before final balance approval (QA-011/QA-015, GRAND-004).
+
+### Bankruptcy (RULE-016/017)
+
+- The debtor may declare bankruptcy at any time while in debt. Expiry of the persisted deadline forces it.
+- **Owed to a player:** the creditor receives all the debtor's cash and every asset. Developments are first sold back at 50%, with the proceeds going to the creditor. Mortgaged assets stay mortgaged, with no fee.
+- **Owed to the bank:** every asset returns unowned, unmortgaged, and undeveloped. There are no auctions.
+- **In every case:**
+  - held cards return to their decks' discard piles;
+  - the debtor's open trades are voided;
+  - a suspended card effect is dropped;
+  - a neutral elimination fact records the creditor, the amount, the cash moved, and the assets moved.
+- Bankrupt players own nothing, hold nothing, and have no cash.
+- If the game continues, the next eligible seat starts a new turn.
+
+### Teams (RULE-018)
+
+- TEAMS matches have a fixed partition of every player into two or more teams, set before start and locked afterwards. FFA matches have no teams.
+- Economics are identical to FFA: teammates pay each other rent, keep separate cash, and trade normally. Legitimate teammate cooperation is never treated as FFA collusion (INT-001/002).
+
+### Win conditions (RULE-019)
+
+- v1 ships LAST_STANDING only. The match ends inside the eliminating transition as soon as one player (FFA) or one team (TEAMS) remains.
+- The immutable outcome lists:
+  - the winners (every member of the winning team);
+  - the winning team;
+  - placements, with survivors in seat order and then eliminations newest first.
+- Every later command is refused. Round and time limits and any tie-break are deferred.

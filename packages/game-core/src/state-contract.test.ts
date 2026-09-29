@@ -79,7 +79,7 @@ function withPending(
 ) {
   const debt = pending.obligation === null
     ? null
-    : { resolutionId: pending.resolutionId, deadlineAt: 5000, bankruptcyRequired: false };
+    : { resolutionId: pending.resolutionId, deadlineAt: 5000 };
   return parseGameState(
     { ...state, pendingResolution: pending, ruleState: { ...state.ruleState, debt } },
     board,
@@ -119,7 +119,7 @@ function suspendedCardDebt(card: GameState, pending: PendingResolution): GameSta
         frames: [],
         roll: card.pendingResolution!.roll,
       },
-      debt: { resolutionId: pending.resolutionId, deadlineAt: 5000, bankruptcyRequired: false },
+      debt: { resolutionId: pending.resolutionId, deadlineAt: 5000 },
     },
   }, standard, contractCatalog);
 }
@@ -153,7 +153,7 @@ function holdingFeeDue(state: GameState): GameState {
     },
     ruleState: {
       ...state.ruleState,
-      debt: { resolutionId: "turn-1:holding-fee", deadlineAt: 5000, bankruptcyRequired: false },
+      debt: { resolutionId: "turn-1:holding-fee", deadlineAt: 5000 },
     },
   }, standard);
 }

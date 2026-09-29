@@ -39,6 +39,29 @@ function startedGame() {
   ).state;
 }
 
+/** Marks players bankrupt the way RULE-016/017 leave them: no cash and one elimination fact each. */
+function withBankrupt(state: ReturnType<typeof startedGame>, userIds: readonly string[]) {
+  return parseGameState({
+    ...state,
+    players: state.players.map((player) => userIds.includes(player.userId)
+      ? { ...player, status: "BANKRUPT", cash: 0 }
+      : player),
+    ruleState: {
+      ...state.ruleState,
+      eliminations: userIds.map((userId) => ({
+        userId,
+        reason: "DECLARED",
+        creditor: { type: "BANK" },
+        obligationAmount: 1,
+        cashTransferred: 0,
+        assetIds: [],
+        gameVersion: 1,
+        actionId: "eliminate-" + userId,
+      })),
+    },
+  }, board);
+}
+
 function rollCurrentTurn(
   state: ReturnType<typeof startedGame>,
   actionId: string,
@@ -134,18 +157,9 @@ describe("CORE-006 turn lifecycle", () => {
     });
   });
 
-  it("skips bankrupt players and ends when only one active player remains", () => {
+  it("skips bankrupt players when passing the turn", () => {
     const started = startedGame();
-    const withMiddlePlayerBankrupt = parseGameState(
-      {
-        ...started,
-        players: started.players.map((player) => ({
-          ...player,
-          status: player.userId === "google:alice" ? "BANKRUPT" : player.status,
-        })),
-      },
-      board,
-    );
+    const withMiddlePlayerBankrupt = withBankrupt(started, ["google:alice"]);
     const rolledBeforeSkip = rollCurrentTurn(withMiddlePlayerBankrupt, "roll-before-skip");
     const skipped = accepted(
       applyGameplayCommand(
@@ -155,27 +169,6 @@ describe("CORE-006 turn lifecycle", () => {
       ),
     ).state;
     expect(skipped.turn?.activePlayerId).toBe("google:bob");
-
-    const withOneActive = parseGameState(
-      {
-        ...skipped,
-        players: skipped.players.map((player) => ({
-          ...player,
-          status: player.userId === "google:bob" ? "ACTIVE" : "BANKRUPT",
-        })),
-      },
-      board,
-    );
-    const rolledBeforeFinish = rollCurrentTurn(withOneActive, "roll-before-finish");
-    const ended = accepted(
-      applyGameplayCommand(
-        rolledBeforeFinish,
-        command("END_TURN", "finish", rolledBeforeFinish.gameVersion),
-        context("google:bob"),
-      ),
-    );
-    expect(ended.state).toMatchObject({ phase: "GAME_OVER", turn: null });
-    expect(ended.event).toMatchObject({ type: "GAME_ENDED", winnerUserId: "google:bob" });
   });
 
   it("cannot advance before start, after end, or for a non-owner", () => {
@@ -189,10 +182,27 @@ describe("CORE-006 turn lifecycle", () => {
       applyGameplayCommand(active, command("END_TURN", "wrong"), context("google:alice")),
     ).toMatchObject({ kind: "REJECTED", reason: "NOT_YOUR_TURN" });
 
-    const ended = parseGameState({ ...active, phase: "GAME_OVER", turn: null }, board);
-    expect(
-      applyGameplayCommand(ended, command("END_TURN", "late"), context("google:carol")),
-    ).toMatchObject({ kind: "REJECTED", reason: "GAME_ALREADY_ENDED" });
+    const beaten = withBankrupt(active, ["google:alice", "google:bob"]);
+    const ended = parseGameState({
+      ...beaten,
+      phase: "GAME_OVER",
+      turn: null,
+      ruleState: {
+        ...beaten.ruleState,
+        outcome: {
+          reason: "LAST_STANDING",
+          winnerUserIds: ["google:carol"],
+          winningTeamId: null,
+          placements: ["google:carol", "google:bob", "google:alice"],
+          endedGameVersion: beaten.gameVersion,
+        },
+      },
+    }, board);
+    for (const type of ["END_TURN", "ROLL_DICE", "START_GAME"]) {
+      expect(
+        applyGameplayCommand(ended, command(type, "late-" + type), context("google:carol")),
+      ).toMatchObject({ kind: "REJECTED", reason: "GAME_ALREADY_ENDED", state: ended });
+    }
   });
 
   it("rejects malformed and duplicate canonical player identities", () => {

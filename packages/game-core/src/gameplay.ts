@@ -7,12 +7,14 @@ import {
   type AdvancedRuleState,
   type EffectDiagnostic,
   type EffectFrame,
+  type EliminationFact,
+  type GameOutcome,
   type TradeBundle,
   type TradeFact,
   type TradeState,
 } from "./advanced-rules";
 import { parseBoardDefinition, type BoardDefinition } from "./board";
-import type { CardCatalogDefinition } from "./cards";
+import type { CardCatalogDefinition, LandingRent } from "./cards";
 import {
   classifyGameCommand,
   CommandValidationError,
@@ -36,6 +38,8 @@ import {
 import {
   holdingTileIndex,
   parseGameState,
+  parseTeams,
+  teamOf,
   type AuctionFact,
   type AuctionState,
   type AssetState,
@@ -55,7 +59,7 @@ const COMMAND_TYPES = [
   "BUILD", "SELL_DEVELOPMENT", "MORTGAGE", "UNMORTGAGE",
   "DRAW_CARD", "PAY_HOLDING_FEE", "USE_RELEASE_CARD",
   "PROPOSE_TRADE", "COUNTER_TRADE", "ACCEPT_TRADE", "REJECT_TRADE", "CANCEL_TRADE",
-  "DEBT_TIMEOUT",
+  "DEBT_TIMEOUT", "DECLARE_BANKRUPTCY",
 ] as const;
 
 export type GameplayCommandType = (typeof COMMAND_TYPES)[number];
@@ -97,11 +101,6 @@ export type GameplayEvent =
       readonly type: "TURN_ENDED";
       readonly endedPlayerId: string;
       readonly activePlayerId: string;
-    }
-  | {
-      readonly type: "GAME_ENDED";
-      readonly endedPlayerId: string;
-      readonly winnerUserId: string | null;
     }
   | {
       readonly type: "MATCH_CONFIGURED";
@@ -168,9 +167,11 @@ export type GameplayEvent =
       readonly debtSettled: boolean;
     }
   | {
-      readonly type: "DEBT_HANDOFF";
-      readonly resolutionId: string;
-      readonly obligation: MonetaryObligation;
+      readonly type: "PLAYER_BANKRUPT";
+      readonly fact: EliminationFact;
+      /** Next turn owner, or null when this elimination ended the game. */
+      readonly activePlayerId: string | null;
+      readonly outcome: GameOutcome | null;
     };
 
 export type GameplayRejectionReason =
@@ -219,7 +220,6 @@ export type GameplayRejectionReason =
   | "TRADE_BLOCKED_DURING_AUCTION"
   | "ASSET_IN_PENDING_RESOLUTION"
   | "DEBT_BLOCKED"
-  | "DEBT_HANDOFF_PENDING"
   | "DEBT_NOT_ACTIVE"
   | "DEBT_DEADLINE_NOT_EXPIRED"
   | "STALE_DEBT_TIMEOUT";
@@ -394,7 +394,6 @@ function acceptedState(state: GameState, env: RuleEnv, changes: Changes): GameSt
       : {
           resolutionId: pendingResolution.resolutionId,
           deadlineAt: authoritativeInteger(env.context.debtDeadlineAt, "context.debtDeadlineAt"),
-          bankruptcyRequired: false,
         };
   }
   return parseGameState(
@@ -529,6 +528,7 @@ function resolveLanding(
   draft: Draft,
   userId: string,
   roll: DiceRoll,
+  landingRent: LandingRent = "STANDARD",
 ): Readonly<{ draft: Draft; resolution: TileResolution; enteredHolding: boolean }> {
   const player = draft.players.find((candidate) => candidate.userId === userId);
   if (player === undefined) throw new RangeError("landing player is not in the game");
@@ -556,7 +556,10 @@ function resolveLanding(
       if (asset === undefined) throw new RangeError("landed ownable has no canonical asset");
       if (asset.ownerUserId === null) return result(decision("BUY_DECISION"));
       if (asset.ownerUserId === userId || asset.mortgaged) return result(draft);
-      const rent = rentForAsset({ ...state, assets: draft.assets }, env.board, asset, roll.total);
+      const standard = () => rentForAsset({ ...state, assets: draft.assets }, env.board, asset, roll.total);
+      const rent = landingRent === "STANDARD" ? standard()
+        : landingRent === "DOUBLE" ? standard() * 2
+          : rollDice(env.context.rng).total * 10;
       return result(charge(draft, env, userId, rent, asset.ownerUserId, roll, tileIndex));
     }
     case "TAX":
@@ -636,7 +639,7 @@ function runEffects(
           roll: null,
           obligation: {
             debtorUserId: actorUserId,
-            creditor: { type: "BANK" },
+            creditor: run.creditor,
             amount: run.amount,
             continuation,
           },
@@ -651,7 +654,9 @@ function runEffects(
     pendingResolution: null,
   };
   if (run.terminal?.type === "ENTER_HOLDING") next = enterHolding(next, env, actorUserId);
-  else if (run.terminal?.type === "LAND") next = resolveLanding(state, env, next, actorUserId, roll).draft;
+  else if (run.terminal?.type === "LAND") {
+    next = resolveLanding(state, env, next, actorUserId, roll, run.terminal.rent).draft;
+  }
   return { kind: "APPLIED", outcome: "COMPLETED", drawnCardIds: run.drawnCardIds, draft: next };
 }
 
@@ -667,7 +672,7 @@ function settleObligation(state: GameState, env: RuleEnv, draft: Draft): Settlem
   const pending = draft.pendingResolution;
   const obligation = pending?.obligation ?? null;
   const unchanged: Settlement = { kind: "APPLIED", draft, settled: false };
-  if (pending === null || obligation === null || draft.ruleState.debt?.bankruptcyRequired) return unchanged;
+  if (pending === null || obligation === null) return unchanged;
   const debtor = draft.players.find((player) => player.userId === obligation.debtorUserId);
   if (debtor === undefined || debtor.cash < obligation.amount) return unchanged;
   const creditorUserId = obligation.creditor.type === "PLAYER" ? obligation.creditor.userId : null;
@@ -709,16 +714,18 @@ function configureMatch(state: GameState, env: RuleEnv): GameplayCommandResult {
   if (!state.players.some((player) => player.userId === env.actorUserId)) {
     return rejected(state, "ACTOR_NOT_IN_GAME");
   }
-  const payload = payloadObject(env.command, ["matchMode", "winMode", "startingCash"]);
+  const payload = payloadObject(env.command, ["matchMode", "winMode", "startingCash", "teams"]);
+  const matchMode = payload.matchMode === "FFA" || payload.matchMode === "TEAMS"
+    ? payload.matchMode
+    : (() => { throw new CommandValidationError("payload.matchMode", "expected FFA or TEAMS"); })();
   const settings: MatchSettings = {
-    matchMode: payload.matchMode === "FFA" || payload.matchMode === "TEAMS"
-      ? payload.matchMode
-      : (() => { throw new CommandValidationError("payload.matchMode", "expected FFA or TEAMS"); })(),
+    matchMode,
     winMode: payload.winMode === "LAST_STANDING"
       ? payload.winMode
       : (() => { throw new CommandValidationError("payload.winMode", "expected LAST_STANDING"); })(),
     startingCash: typeof payload.startingCash === "number" ? payload.startingCash : Number.NaN,
     pacing: "CORE",
+    teams: parseTeams(payload.teams, matchMode, new Set(state.players.map((player) => player.userId))),
   };
   const nextState = acceptedState(state, env, {
     settings,
@@ -1269,7 +1276,6 @@ function ownedAssetAction(
   if (pending !== null) {
     const ownDebt = pending.obligation?.debtorUserId === env.actorUserId;
     if (!liquidation || !ownDebt) return rejected(state, "PENDING_RESOLUTION");
-    if (state.ruleState.debt?.bankruptcyRequired) return rejected(state, "DEBT_HANDOFF_PENDING");
   }
   const assetIndex = state.assets.findIndex((candidate) => candidate.assetId === assetId);
   const asset = state.assets[assetIndex];
@@ -1407,12 +1413,13 @@ function tradeFact(
   type: TradeFact["type"],
   trade: TradeState,
   env: RuleEnv,
+  actorUserId = env.actorUserId,
 ): TradeFact {
   return freezeTrade({
     type,
     tradeId: trade.tradeId,
     parentTradeId: trade.parentTradeId,
-    actorUserId: env.actorUserId,
+    actorUserId,
     proposerUserId: trade.proposerUserId,
     recipientUserId: trade.recipientUserId,
     offered: trade.offered,
@@ -1438,7 +1445,6 @@ function tradeRejection(state: GameState, env: RuleEnv, trade: TradeState): Game
   const pending = state.pendingResolution;
   const debtorUserId = pending?.obligation?.debtorUserId ?? null;
   if (debtorUserId !== null && parties.includes(debtorUserId)) {
-    if (state.ruleState.debt?.bankruptcyRequired) return "DEBT_HANDOFF_PENDING";
     // Only an explicit liquidation trade created under this debt may involve the debtor.
     if (trade.liquidationFor !== pending?.resolutionId) return "DEBT_BLOCKED";
   }
@@ -1583,23 +1589,132 @@ function acceptTrade(state: GameState, env: RuleEnv): GameplayCommandResult {
   });
 }
 
-/** Deadline expiry produces the bankruptcy handoff only; RULE-016/017 perform the transfer. */
+/** The surviving player (FFA) or team (TEAMS), once only one remains. */
+function lastStanding(state: GameState, players: readonly PlayerState[]): Readonly<{
+  winnerUserIds: readonly string[];
+  winningTeamId: string | null;
+}> | null {
+  const survivors = players.filter((player) => player.status === "ACTIVE").map((player) => player.userId);
+  if (state.settings.matchMode === "FFA") {
+    return survivors.length === 1 ? { winnerUserIds: survivors, winningTeamId: null } : null;
+  }
+  const teamIds = new Set(survivors.map((userId) => teamOf(state.settings, userId)));
+  if (teamIds.size !== 1) return null;
+  const team = state.settings.teams.find((candidate) => teamIds.has(candidate.teamId));
+  return team === undefined ? null : { winnerUserIds: team.memberUserIds, winningTeamId: team.teamId };
+}
+
+/**
+ * RULE-016/017: eliminates the debtor atomically. A player creditor receives all cash and assets
+ * (developments sold back at 50% first, mortgages kept); a bank creditor gets assets reset. Held
+ * cards return to their decks, the debtor's trades are voided, and the game ends if one player or
+ * team remains, otherwise the next eligible seat starts a new turn.
+ */
+function bankrupt(state: GameState, env: RuleEnv, reason: EliminationFact["reason"]): GameplayCommandResult {
+  const pending = state.pendingResolution as PendingResolution;
+  const obligation = pending.obligation as MonetaryObligation;
+  const debtorUserId = obligation.debtorUserId;
+  const creditorUserId = obligation.creditor.type === "PLAYER" ? obligation.creditor.userId : null;
+  const debtor = state.players.find((player) => player.userId === debtorUserId) as PlayerState;
+  let saleProceeds = 0;
+  const assetIds: string[] = [];
+  const assets = state.assets.map((asset): AssetState => {
+    if (asset.ownerUserId !== debtorUserId) return asset;
+    assetIds.push(asset.assetId);
+    if (creditorUserId === null) {
+      return asset.kind === "PROPERTY"
+        ? { ...asset, ownerUserId: null, mortgaged: false, developmentLevel: 0 }
+        : { ...asset, ownerUserId: null, mortgaged: false };
+    }
+    if (asset.kind !== "PROPERTY") return { ...asset, ownerUserId: creditorUserId };
+    saleProceeds += asset.developmentLevel * (propertyForAsset(env.board, asset)?.buildingSellBack ?? 0);
+    return { ...asset, ownerUserId: creditorUserId, developmentLevel: 0 };
+  });
+  const cashTransferred = debtor.cash + (creditorUserId === null ? 0 : saleProceeds);
+  const players = state.players.map((player) => {
+    if (player.userId === debtorUserId) {
+      return { ...player, cash: 0, status: "BANKRUPT" as const, inHolding: false, holdingAttempts: 0 };
+    }
+    if (player.userId === creditorUserId) return { ...player, cash: checkedCash(player.cash + cashTransferred) };
+    return player;
+  });
+  let ruleState: AdvancedRuleState = state.ruleState;
+  for (const card of state.ruleState.heldCards.filter((held) => held.ownerUserId === debtorUserId)) {
+    ruleState = returnHeldCard(ruleState, env.catalog as CardCatalogDefinition, card.cardId, debtorUserId);
+  }
+  const fact: EliminationFact = {
+    userId: debtorUserId,
+    reason,
+    creditor: obligation.creditor,
+    obligationAmount: obligation.amount,
+    cashTransferred,
+    assetIds,
+    gameVersion: env.nextGameVersion,
+    actionId: env.command.actionId,
+  };
+  const winner = lastStanding(state, players);
+  // A finished game keeps no open trades; otherwise only the debtor's trades are voided.
+  const voided = ruleState.trades.filter((trade) => winner !== null
+    || trade.proposerUserId === debtorUserId || trade.recipientUserId === debtorUserId);
+  ruleState = {
+    ...ruleState,
+    effectContinuation: null,
+    trades: ruleState.trades.filter((trade) => !voided.includes(trade)),
+    tradeFacts: [...ruleState.tradeFacts, ...voided.map((trade) => tradeFact("VOIDED", trade, env, debtorUserId))],
+    eliminations: [...ruleState.eliminations, fact],
+  };
+  let outcome: GameOutcome | null = null;
+  let nextOwner: string | null = null;
+  if (winner !== null) {
+    const survivors = players.filter((player) => player.status === "ACTIVE").map((player) => player.userId);
+    outcome = {
+      reason: "LAST_STANDING",
+      ...winner,
+      placements: [...survivors, ...ruleState.eliminations.map((elimination) => elimination.userId).reverse()],
+      endedGameVersion: env.nextGameVersion,
+    };
+  } else {
+    const seat = state.players.findIndex((player) => player.userId === debtorUserId);
+    nextOwner = [...players.slice(seat + 1), ...players.slice(0, seat)]
+      .find((player) => player.status === "ACTIVE")?.userId ?? null;
+  }
+  const turn = state.turn as TurnIdentity;
+  const nextState = acceptedState(state, env, {
+    players,
+    assets,
+    pendingResolution: null,
+    phase: outcome === null ? "ACTIVE_TURN" : "GAME_OVER",
+    turn: nextOwner === null ? null : nextTurn(turn.turnNumber + 1, nextOwner),
+    ruleState: { ...ruleState, outcome },
+  });
+  return accepted(nextState, { type: "PLAYER_BANKRUPT", fact, activePlayerId: nextOwner, outcome });
+}
+
+function outstandingDebt(state: GameState, resolutionId: string) {
+  const pending = state.pendingResolution;
+  return pending?.resolutionId === resolutionId && pending.obligation !== null ? pending.obligation : null;
+}
+
+/** The debtor may give up at any time while in debt. */
+function declareBankruptcy(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["resolutionId"]);
+  const obligation = outstandingDebt(state, payloadIdentifier(payload.resolutionId, "payload.resolutionId"));
+  if (obligation === null) return rejected(state, "DEBT_NOT_ACTIVE");
+  if (obligation.debtorUserId !== env.actorUserId) return rejected(state, "NOT_YOUR_TURN");
+  return bankrupt(state, env, "DECLARED");
+}
+
+/** Expiry of the persisted absolute debt deadline forces bankruptcy. */
 function timeoutDebt(state: GameState, env: RuleEnv): GameplayCommandResult {
   const now = authoritativeInteger(env.context.currentTime, "context.currentTime");
   const payload = payloadObject(env.command, ["resolutionId", "deadlineAt"]);
   const resolutionId = payloadIdentifier(payload.resolutionId, "payload.resolutionId");
   const deadlineAt = authoritativeInteger(payload.deadlineAt, "payload.deadlineAt");
   const debt = state.ruleState.debt;
-  const obligation = state.pendingResolution?.obligation ?? null;
-  if (debt === null || obligation === null || debt.bankruptcyRequired || debt.resolutionId !== resolutionId) {
-    return rejected(state, "DEBT_NOT_ACTIVE");
-  }
+  if (debt === null || outstandingDebt(state, resolutionId) === null) return rejected(state, "DEBT_NOT_ACTIVE");
   if (debt.deadlineAt !== deadlineAt) return rejected(state, "STALE_DEBT_TIMEOUT");
   if (now < debt.deadlineAt) return rejected(state, "DEBT_DEADLINE_NOT_EXPIRED");
-  return accepted(
-    acceptedState(state, env, { ruleState: { ...state.ruleState, debt: { ...debt, bankruptcyRequired: true } } }),
-    { type: "DEBT_HANDOFF", resolutionId, obligation },
-  );
+  return bankrupt(state, env, "DEADLINE");
 }
 
 function endCurrentTurn(state: GameState, env: RuleEnv): GameplayCommandResult {
@@ -1607,13 +1722,6 @@ function endCurrentTurn(state: GameState, env: RuleEnv): GameplayCommandResult {
   if (guard !== null) return rejected(state, guard);
   const turn = state.turn as TurnIdentity;
   if (!turn.hasRolled || turn.rollAgain) return rejected(state, "ROLL_REQUIRED");
-
-  const eligiblePlayers = state.players.filter((player) => player.status === "ACTIVE");
-  if (eligiblePlayers.length <= 1) {
-    const winnerUserId = eligiblePlayers[0]?.userId ?? null;
-    const nextState = acceptedState(state, env, { phase: "GAME_OVER", turn: null });
-    return accepted(nextState, { type: "GAME_ENDED", endedPlayerId: env.actorUserId, winnerUserId });
-  }
 
   const currentIndex = state.players.findIndex((player) => player.userId === env.actorUserId);
   for (let offset = 1; offset <= state.players.length; offset += 1) {
@@ -1660,6 +1768,8 @@ export function applyGameplayCommand(
     case "NEW_ACTION":
       break;
   }
+  // RULE-019: the final state is immutable; only rematch (a new game) follows.
+  if (state.phase === "GAME_OVER") return rejected(state, "GAME_ALREADY_ENDED");
   const env: RuleEnv = {
     board,
     catalog: context.cardCatalog,
@@ -1691,5 +1801,6 @@ export function applyGameplayCommand(
     case "REJECT_TRADE": return closeTrade(state, env, "REJECTED");
     case "CANCEL_TRADE": return closeTrade(state, env, "CANCELLED");
     case "DEBT_TIMEOUT": return timeoutDebt(state, env);
+    case "DECLARE_BANKRUPTCY": return declareBankruptcy(state, env);
   }
 }

@@ -10,7 +10,12 @@ import * as publicApi from "./index";
 
 const board = parseBoardDefinition(standardFixture);
 
-function catalog() {
+/** Raw, deliberately loosely typed input: the tests below mutate it into malformed catalogs. */
+function catalog(): {
+  decks: { deckId: string; cardIds: string[] }[];
+  cards: Record<string, unknown>[];
+  effects: Record<string, unknown>[];
+} {
   return {
     decks: [
       { deckId: "surprise", cardIds: ["surprise:advance"] },
@@ -26,7 +31,7 @@ function catalog() {
       {
         cardId: "treasure:release",
         deckId: "treasure",
-        effectId: "effect:release",
+        effectId: null,
         heldCapability: "DETENTION_RELEASE",
       },
       {
