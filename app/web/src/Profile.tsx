@@ -48,7 +48,7 @@ export function ProfilePage({ me }: { me: Me }) {
               <span className="token" style={{ width: 56, height: 56, fontSize: 20, background: "var(--table)", boxShadow: ring === undefined ? undefined : "0 0 0 3px " + ring }}>{initials(profile.displayName)}</span>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span className="dialog-title">{profile.displayName}</span>
-                {title !== undefined && <span className="label" style={{ color: "var(--brass)" }}>{title}</span>}
+                {title !== undefined && <span className="label" style={{ color: "var(--brass-text)" }}>{title}</span>}
               </div>
               <div style={{ marginLeft: "auto", textAlign: "right" }}>
                 <div className="label" style={{ color: "var(--ink-mute)" }}>Coins</div>

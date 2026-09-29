@@ -118,6 +118,20 @@ describe("room client", () => {
     expect(client.getSnapshot().pendingActionIds).toEqual([]);
   });
 
+  it("ignores frames from a socket it already replaced", () => {
+    const { client, sockets, timers, last } = setup();
+    last().open();
+    last().deliver(state(5));
+    const old = last();
+    old.drop();
+    timers.shift()?.();
+    last().open();
+    last().deliver(state(6));
+    old.deliver({ type: "SESSION_REPLACED" });
+    expect(client.getSnapshot().status).toBe("OPEN");
+    expect(sockets).toHaveLength(2);
+  });
+
   it("stops for good when the session is replaced", () => {
     const { client, last, timers, sockets } = setup();
     last().open();

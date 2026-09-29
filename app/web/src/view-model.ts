@@ -202,6 +202,16 @@ export function initials(name: string): string {
   return letters.toUpperCase();
 }
 
+/** Initials colour with AA contrast on a token colour: ink on light tokens, white otherwise. */
+export function textOn(hex: string): string {
+  const channel = (offset: number) => {
+    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+  return luminance > 0.25 ? "#1B2129" : "#FFFFFF";
+}
+
 export function playerColor(seatIndex: number): string {
   return PLAYER_COLORS[seatIndex % PLAYER_COLORS.length] as string;
 }

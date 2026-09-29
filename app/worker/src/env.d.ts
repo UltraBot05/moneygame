@@ -5,4 +5,6 @@
 interface Env {
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
+  /** QA-012 only: "1" enables /auth/test-login on localhost. Never set in deployment. */
+  E2E_TEST_LOGIN?: string;
 }

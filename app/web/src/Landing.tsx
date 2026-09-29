@@ -213,12 +213,12 @@ export function Lobby({ snapshot, client, me }: { snapshot: RoomSnapshot; client
             ))}
             <div style={{ padding: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
               {self !== undefined && (
-                <button type="button" className={self.ready ? "btn btn-slate" : "btn btn-outline-light"} onClick={() => client.room({ kind: "SET_READY", ready: !self.ready })}>
+                <button type="button" className={self.ready ? "btn btn-slate" : "btn btn-outline-light"} disabled={snapshot.status !== "OPEN"} onClick={() => client.room({ kind: "SET_READY", ready: !self.ready })}>
                   {self.ready ? "Not ready" : "I'm ready"}
                 </button>
               )}
               {isHost && (
-                <button type="button" className="btn btn-primary" disabled={!canStart} onClick={() => client.room({ kind: "START" })}>Start the match</button>
+                <button type="button" className="btn btn-primary" disabled={!canStart || snapshot.status !== "OPEN"} onClick={() => client.room({ kind: "START" })}>Start the match</button>
               )}
               {!isHost && (
                 <button type="button" className="btn btn-ghost" style={{ color: "var(--on-slate-mute)" }}

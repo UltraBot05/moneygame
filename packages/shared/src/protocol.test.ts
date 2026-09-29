@@ -77,3 +77,26 @@ describe("RT-002 shared wire protocol", () => {
     expect(stateHash("")).toBe("811c9dc5");
   });
 });
+
+describe("QA-009 client tampering at the wire boundary", () => {
+  const command = (extra: Record<string, unknown>) => JSON.stringify({
+    type: "COMMAND",
+    command: { type: "ROLL_DICE", gameId: "g", actionId: "a", expectedGameVersion: 1, payload: {}, ...extra },
+  });
+
+  it("refuses any client-supplied identity, role or authority field", () => {
+    for (const field of ["actorUserId", "userId", "role", "system"]) {
+      expect(code(() => parseClientMessage(command({ [field]: "u-host" })))).toBe("MALFORMED_MESSAGE");
+    }
+    expect(code(() => parseClientMessage(JSON.stringify({ type: "CHAT", text: "hi", userId: "u-host" })))).toBe("MALFORMED_MESSAGE");
+    expect(code(() => parseClientMessage(JSON.stringify({ type: "ROOM", action: { kind: "START", asHost: true } })))).toBe("MALFORMED_MESSAGE");
+  });
+
+  it("refuses unknown room actions, bad settings and non-object frames", () => {
+    expect(code(() => parseClientMessage(JSON.stringify({ type: "ROOM", action: { kind: "KICK", userId: "u-ben" } })))).toBe("MALFORMED_MESSAGE");
+    expect(code(() => parseClientMessage(JSON.stringify({
+      type: "ROOM", action: { kind: "CONFIGURE", settings: { ...DEFAULT_ROOM_SETTINGS, startingCash: 999_999, bots: 3 } },
+    })))).toBe("MALFORMED_MESSAGE");
+    for (const raw of ["[]", "null", "42", "\"COMMAND\""]) expect(code(() => parseClientMessage(raw))).toBe("MALFORMED_MESSAGE");
+  });
+});

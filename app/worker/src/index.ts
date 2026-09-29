@@ -4,10 +4,10 @@ import type { ConsumeResult, OAuthTransaction, TransactionStore } from "./auth-s
 import { handleCallback, sanitizeRoomCode, startAuth, type FlowDeps } from "./auth-flow";
 import { reserveRoomCreation } from "./finalization";
 import { GameRoom, NAME_HEADER, RING_HEADER, USER_HEADER } from "./game-room";
-import { d1Identity, type IdentityStore, type UserRecord } from "./identity";
+import { d1Identity, sanitizeDisplayName, type IdentityStore, type UserRecord } from "./identity";
 import { equippedRing, equipCosmetic, loadProfile, purchaseCosmetic } from "./profile";
 import { createGoogleProvider } from "./oidc";
-import { clearCookie, parseCookies, SESSION_COOKIE, verifySession } from "./session";
+import { clearCookie, issueSession, parseCookies, serializeCookie, SESSION_COOKIE, verifySession } from "./session";
 
 // Durable Object classes must be exported from the Worker entry module.
 export { AuthStore, GameRoom };
@@ -63,7 +63,7 @@ function newRoomCode(): string {
 }
 
 function json(body: unknown, status = 200): Response {
-  return Response.json(body, { status, headers: { "cache-control": "no-store" } });
+  return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 }
 
 async function createRoom(env: Env, user: UserRecord): Promise<Response> {
@@ -110,6 +110,24 @@ async function profileRoute(request: Request, env: Env, url: URL, user: UserReco
   return json({ error: "BAD_REQUEST" }, 400);
 }
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * QA-012 browser E2E sign-in, so multi-browser tests need no Google account. Double-gated: the
+ * E2E_TEST_LOGIN var (set only by the local test command, never in wrangler.toml) and a
+ * localhost host, which a deployed zone never serves. Test users live under an "e2e:" key.
+ */
+async function testLogin(url: URL, env: Env, identity: IdentityStore): Promise<Response> {
+  const name = sanitizeDisplayName(url.searchParams.get("name") ?? "Tester");
+  const user = await identity.loginWithGoogle("e2e:" + name, name, Date.now());
+  const session = await issueSession(user.userId, env.SESSION_SECRET, SESSION_TTL_SEC, Date.now());
+  const room = sanitizeRoomCode(url.searchParams.get("room") ?? "");
+  return new Response(null, {
+    status: 302,
+    headers: { Location: room === null ? "/" : "/r/" + room, "Set-Cookie": serializeCookie(SESSION_COOKIE, session, { maxAgeSec: SESSION_TTL_SEC }) },
+  });
+}
+
 async function openRoomSocket(request: Request, env: Env, url: URL, rawCode: string, user: UserRecord): Promise<Response> {
   const roomCode = sanitizeRoomCode(rawCode);
   if (roomCode === null) return json({ error: "ROOM_NOT_FOUND" }, 404);
@@ -133,10 +151,14 @@ export default {
     if (url.pathname === "/auth/login") {
       return startAuth(url.searchParams.get("room"), cookies, url.origin, flowDeps(env, identity));
     }
+    if (url.pathname === "/auth/test-login" && env.E2E_TEST_LOGIN === "1" && LOCAL_HOSTS.has(url.hostname)) {
+      return testLogin(url, env, identity);
+    }
     if (url.pathname === "/auth/callback") {
       return handleCallback(url, cookies, url.origin, flowDeps(env, identity));
     }
     if (url.pathname === "/auth/logout" && request.method === "POST") {
+      if (!sameOrigin(request, url)) return json({ error: "FORBIDDEN_ORIGIN" }, 403);
       return new Response(null, { status: 303, headers: { Location: "/", "Set-Cookie": clearCookie(SESSION_COOKIE) } });
     }
     if (url.pathname === "/api/health") return json({ ok: true, protocolVersion: PROTOCOL_VERSION });
