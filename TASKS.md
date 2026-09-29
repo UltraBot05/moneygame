@@ -306,16 +306,18 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 | RT-006 | DONE   | hibernation reconstruction         | RT-005,SPIKE-001           | constructor wake reconstructs canonical state safely                                |
 | RT-007 | DONE   | earliest-deadline alarm scheduler  | RT-006                     | no pinning timers; all due work ordered/retry-safe; obsolete deadlines cleared      |
 | RT-008 | DONE   | reconnect/epoch                    | RT-003,005,007,SPIKE-004   | spike behavior integrated with gameplay/auction/debt/turn state                     |
-| RT-009 | TODO   | host/co-host migration             | RT-008                     | host loss does not lose game; permissions migrate deterministically                 |
-| RT-010 | TODO   | pause/resume                       | RT-007,009                 | authorized pause only; deadline semantics match frozen architecture                 |
-| RT-011 | TODO   | chat/rate limit                    | RT-003                     | bounded/rate-limited; no game mutation                                              |
-| RT-012 | TODO   | finalization to D1                 | RT-005,DATA-001            | durable pending delivery; idempotent gameId; retry/restart recovery                 |
-| RT-013 | TODO   | production rematch lifecycle       | RT-005,012,RULE-019        | fresh gameId/GameState; old work cancelled; pending finalization preserved          |
-| RT-014 | TODO   | state projection + event delivery  | RT-002,004,005             | committed ordering; bounded catch-up/full resync; role-safe/private-state filtering |
-| RT-015 | TODO   | boundary abuse controls            | AUTH-001,RT-001,002,003    | payload/rate/connection bounds; membership/role checks; spike-only controls absent  |
-| RT-016 | TODO   | retention + recovery cleanup       | AUTH-001,RT-005,007,012    | expired auth/action data bounded; pending finalization/recovery not lost            |
-| RT-017 | TODO   | integrity evidence + enforcement   | INT-002,RT-005,007,014     | warnings/evidence/consequences persisted once; reconnect/wake safe                  |
-| RT-018 | TODO   | gameplay diagnostics/audit log     | RT-005,007,014             | bounded game/action/version logs; no secrets; reproducible failure context          |
+| RT-009 | DONE   | host/co-host migration             | RT-008                     | host loss does not lose game; permissions migrate deterministically                 |
+| RT-010 | DONE   | pause/resume                       | RT-007,009                 | authorized pause only; deadline semantics match frozen architecture                 |
+| RT-011 | DONE   | chat/rate limit                    | RT-003                     | bounded/rate-limited; no game mutation                                              |
+| RT-012 | DONE   | finalization to D1                 | RT-005,DATA-001            | durable pending delivery; idempotent gameId; retry/restart recovery                 |
+| RT-013 | DONE   | production rematch lifecycle       | RT-005,012,RULE-019        | fresh gameId/GameState; old work cancelled; pending finalization preserved          |
+| RT-014 | DONE   | state projection + event delivery  | RT-002,004,005             | committed ordering; bounded catch-up/full resync; role-safe/private-state filtering |
+| RT-015 | DONE   | boundary abuse controls            | AUTH-001,RT-001,002,003    | payload/rate/connection bounds; membership/role checks; spike-only controls absent  |
+| RT-016 | DONE   | retention + recovery cleanup       | AUTH-001,RT-005,007,012    | expired auth/action data bounded; pending finalization/recovery not lost            |
+| RT-017 | DONE   | integrity evidence + enforcement   | INT-002,RT-005,007,014     | warnings/evidence/consequences persisted once; reconnect/wake safe                  |
+| RT-018 | DONE   | gameplay diagnostics/audit log     | RT-005,007,014             | bounded game/action/version logs; no secrets; reproducible failure context          |
+
+**E2 review (2026-09-29):** RT-009..018 implemented per `docs/architecture/RUNTIME-E2.md` (host migration, pause/resume with RESUME_CLOCKS, bounded chat, D1 finalization with retry, rematch isolation, state hashes, rate/spectator/room-creation bounds, spike room retired, retention, fair-play evidence in state, bounded diagnostics) and approved after an adversarial review pass. Section E is complete apart from deployment (QA-014).
 
 ---
 

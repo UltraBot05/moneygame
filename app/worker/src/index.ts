@@ -2,14 +2,14 @@ import { PROTOCOL_VERSION } from "@moneygame/shared";
 import { AuthStore } from "./auth-do";
 import type { ConsumeResult, OAuthTransaction, TransactionStore } from "./auth-store";
 import { handleCallback, sanitizeRoomCode, startAuth, type FlowDeps } from "./auth-flow";
+import { reserveRoomCreation } from "./finalization";
 import { GameRoom, NAME_HEADER, USER_HEADER } from "./game-room";
 import { d1Identity, type IdentityStore, type UserRecord } from "./identity";
 import { createGoogleProvider } from "./oidc";
-import { SpikeRoom } from "./room";
 import { clearCookie, parseCookies, SESSION_COOKIE, verifySession } from "./session";
 
 // Durable Object classes must be exported from the Worker entry module.
-export { AuthStore, GameRoom, SpikeRoom };
+export { AuthStore, GameRoom };
 
 const SESSION_TTL_SEC = 7 * 24 * 60 * 60; // app session outlives the 90s room lease
 const TXN_TTL_SEC = 10 * 60; // OAuth transaction validity
@@ -66,6 +66,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 async function createRoom(env: Env, user: UserRecord): Promise<Response> {
+  if (!await reserveRoomCreation(env.DB, user.userId, Date.now())) return json({ error: "RATE_LIMITED" }, 429);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const roomCode = newRoomCode();
     if (await env.GAME_ROOM.getByName(roomCode).initialize(roomCode, user.userId, user.displayName)) {

@@ -108,6 +108,9 @@ export function createSqlTxnStore(sql: SqlExec): TransactionStore {
       bindingHash: string,
       now: number,
     ): Promise<ConsumeResult> {
+      // RT-016 retention: expired transactions are useless (a replay of one is still
+      // refused, as NOT_FOUND), so they are purged here, where the clock is known.
+      sql.run(`DELETE FROM oauth_txn WHERE expires_at <= ? AND state != ?;`, now, state);
       // Atomic one-time claim: only an unconsumed, unexpired, correctly-bound
       // row can be marked consumed, and exactly one caller wins the write.
       const claimed = sql.run(

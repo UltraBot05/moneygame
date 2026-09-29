@@ -60,12 +60,12 @@ const COMMAND_TYPES = [
   "BUILD", "SELL_DEVELOPMENT", "MORTGAGE", "UNMORTGAGE",
   "DRAW_CARD", "PAY_HOLDING_FEE", "USE_RELEASE_CARD",
   "PROPOSE_TRADE", "COUNTER_TRADE", "ACCEPT_TRADE", "REJECT_TRADE", "CANCEL_TRADE",
-  "DEBT_TIMEOUT", "DECLARE_BANKRUPTCY", "TURN_TIMEOUT",
+  "DEBT_TIMEOUT", "DECLARE_BANKRUPTCY", "TURN_TIMEOUT", "RESUME_CLOCKS",
 ] as const;
 
 /** Commands only the room runtime may issue (from persisted deadlines), never a client. */
 export const SYSTEM_COMMAND_TYPES: ReadonlySet<string> = new Set([
-  "AUCTION_TIMEOUT", "DEBT_TIMEOUT", "TURN_TIMEOUT",
+  "AUCTION_TIMEOUT", "DEBT_TIMEOUT", "TURN_TIMEOUT", "RESUME_CLOCKS",
 ]);
 
 export type GameplayCommandType = (typeof COMMAND_TYPES)[number];
@@ -175,6 +175,7 @@ export type GameplayEvent =
       readonly incident: FairPlayIncident | null;
       readonly eliminations: readonly EliminationFact[];
     }
+  | { readonly type: "CLOCKS_RESUMED"; readonly pausedMs: number }
   | {
       /** A turn deadline expired: the owner's default moves, in order, as one committed step. */
       readonly type: "TURN_AUTO_PLAYED";
@@ -242,7 +243,8 @@ export type GameplayRejectionReason =
   | "DEBT_DEADLINE_NOT_EXPIRED"
   | "STALE_DEBT_TIMEOUT"
   | "STALE_TURN_TIMEOUT"
-  | "NOTHING_TO_AUTO_PLAY";
+  | "NOTHING_TO_AUTO_PLAY"
+  | "NO_CLOCKS_TO_RESUME";
 
 export type GameplayCommandResult =
   | {
@@ -1864,6 +1866,25 @@ function timeoutTurn(state: GameState, env: RuleEnv): GameplayCommandResult {
   return accepted(current, { type: "TURN_AUTO_PLAYED", playerId: owner, steps });
 }
 
+/**
+ * RT-010 resume: moves every in-state deadline (auction decision, debt) later by the time the
+ * room spent paused, so a pause never costs anyone their decision time.
+ */
+function resumeClocks(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["pausedMs"]);
+  const pausedMs = authoritativeInteger(payload.pausedMs, "payload.pausedMs");
+  const auction = state.auction;
+  const debt = state.ruleState.debt;
+  if (pausedMs === 0 || (auction === null && debt === null)) return rejected(state, "NO_CLOCKS_TO_RESUME");
+  return accepted(
+    acceptedState(state, env, {
+      auction: auction === null ? null : { ...auction, decisionDeadlineAt: auction.decisionDeadlineAt + pausedMs },
+      ruleState: { ...state.ruleState, debt: debt === null ? null : { ...debt, deadlineAt: debt.deadlineAt + pausedMs } },
+    }),
+    { type: "CLOCKS_RESUMED", pausedMs },
+  );
+}
+
 /** The debtor may give up at any time while in debt. */
 function declareBankruptcy(state: GameState, env: RuleEnv): GameplayCommandResult {
   const payload = payloadObject(env.command, ["resolutionId"]);
@@ -1972,5 +1993,6 @@ export function applyGameplayCommand(
     case "DEBT_TIMEOUT": return timeoutDebt(state, env);
     case "DECLARE_BANKRUPTCY": return declareBankruptcy(state, env);
     case "TURN_TIMEOUT": return timeoutTurn(state, env);
+    case "RESUME_CLOCKS": return resumeClocks(state, env);
   }
 }
