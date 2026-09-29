@@ -248,4 +248,3 @@ Decided by the product owner for RULE-011, 012, 016, 017, 018, and 019, followin
   by players dropping out when they are done, because the rules have no length limit.
 - **No length limit, by choice.** A table that never trades can play indefinitely; the owner accepts
   this (players resign when bored). A timed game mode is a possible later module (backlog POST-009).
-
