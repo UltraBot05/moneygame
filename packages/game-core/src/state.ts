@@ -1131,6 +1131,10 @@ export function parseGameState(
     || bankrupt.some((userId) => players.find((player) => player.userId === userId)?.cash !== 0)) {
     fail("$.ruleState.eliminations", "every bankrupt player is eliminated exactly once with no cash");
   }
+  if (settings.matchMode === "TEAMS"
+    && (ruleState.fairPlay.lopsidedTrades.length > 0 || ruleState.fairPlay.incidents.length > 0)) {
+    fail("$.ruleState.fairPlay", "the FFA fair-play guard never evaluates TEAMS matches");
+  }
   const outcome = ruleState.outcome;
   if ((phase === "GAME_OVER") !== (outcome !== null)) {
     fail("$.ruleState.outcome", "an outcome exists exactly when the game is over");

@@ -2,6 +2,7 @@ import type { BoardDefinition } from "./board";
 import type { CardCatalogDefinition, CardDefinition, HeldCardCapability, LandingRent } from "./cards";
 import type { DiceRoll } from "./dice";
 import type { CardDeck } from "./economy";
+import { EMPTY_FAIR_PLAY, type FairPlayIncident, type FairPlayState, type LopsidedTrade } from "./integrity";
 import { calculateMovement } from "./movement";
 import { shuffle, type RandomSource } from "./random";
 import type { AssetState, ObligationCreditor, PlayerState } from "./state";
@@ -81,10 +82,15 @@ export interface DebtRuleState {
   readonly deadlineAt: number;
 }
 
-/** Neutral bankruptcy record: who went out, to whom, and exactly what moved. */
+/**
+ * Neutral elimination record: who went out, why, to whom, and exactly what moved.
+ * REMOVED (INT-001 fair-play removal) settles to the bank with no debt behind it.
+ */
 export interface EliminationFact {
   readonly userId: string;
-  readonly reason: "DECLARED" | "DEADLINE";
+  readonly reason: "DECLARED" | "DEADLINE" | "REMOVED";
+  /** The debt resolution that ended in bankruptcy; null for a removal. */
+  readonly resolutionId: string | null;
   readonly creditor: ObligationCreditor;
   readonly obligationAmount: number;
   /** Debtor cash plus development sell-back proceeds, paid to the creditor (or the bank). */
@@ -112,6 +118,7 @@ export interface AdvancedRuleState {
   readonly debt: DebtRuleState | null;
   readonly eliminations: readonly EliminationFact[];
   readonly outcome: GameOutcome | null;
+  readonly fairPlay: FairPlayState;
 }
 
 export const EMPTY_ADVANCED_RULE_STATE: AdvancedRuleState = Object.freeze({
@@ -123,6 +130,7 @@ export const EMPTY_ADVANCED_RULE_STATE: AdvancedRuleState = Object.freeze({
   debt: null,
   eliminations: Object.freeze([]),
   outcome: null,
+  fairPlay: EMPTY_FAIR_PLAY,
 });
 
 export class AdvancedRuleValidationError extends Error {
@@ -355,9 +363,19 @@ function parseElimination(value: unknown, index: number, context: AdvancedRulePa
   const path = "$.ruleState.eliminations[" + index + "]";
   const item = record(value, path);
   keys(item, [
-    "userId", "reason", "creditor", "obligationAmount", "cashTransferred", "assetIds", "gameVersion", "actionId",
+    "userId", "reason", "resolutionId", "creditor", "obligationAmount", "cashTransferred", "assetIds",
+    "gameVersion", "actionId",
   ], path);
-  if (item.reason !== "DECLARED" && item.reason !== "DEADLINE") invalid(path + ".reason", "unknown reason");
+  if (item.reason !== "DECLARED" && item.reason !== "DEADLINE" && item.reason !== "REMOVED") {
+    invalid(path + ".reason", "unknown reason");
+  }
+  const resolutionId = nullableId(item.resolutionId, path + ".resolutionId");
+  const obligationAmount = integer(item.obligationAmount, path + ".obligationAmount");
+  if ((item.reason === "REMOVED") !== (resolutionId === null) || (resolutionId !== null) !== (obligationAmount > 0)) {
+    invalid(path, "a bankruptcy ends a debt; a removal has none");
+  }
+  const creditor = parseCreditor(item.creditor, path + ".creditor", context.playerIds);
+  if (item.reason === "REMOVED" && creditor.type !== "BANK") invalid(path + ".creditor", "a removal settles to the bank");
   const assetIds = stringList(item.assetIds, path + ".assetIds");
   for (const assetId of assetIds) {
     if (!context.assetIds.has(assetId)) invalid(path + ".assetIds", "unknown asset " + assetId);
@@ -365,13 +383,76 @@ function parseElimination(value: unknown, index: number, context: AdvancedRulePa
   return {
     userId: player(item.userId, path + ".userId", context.playerIds),
     reason: item.reason,
-    creditor: parseCreditor(item.creditor, path + ".creditor", context.playerIds),
-    obligationAmount: integer(item.obligationAmount, path + ".obligationAmount", 1),
+    resolutionId,
+    creditor,
+    obligationAmount,
     cashTransferred: integer(item.cashTransferred, path + ".cashTransferred"),
     assetIds,
     gameVersion: integer(item.gameVersion, path + ".gameVersion", 1),
     actionId: id(item.actionId, path + ".actionId"),
   };
+}
+
+function parseLopsided(value: unknown, path: string, context: AdvancedRuleParseContext): LopsidedTrade {
+  const item = record(value, path);
+  keys(item, [
+    "tradeId", "giverUserId", "receiverUserId", "givenValue", "returnedValue", "liquidationFor", "gameVersion",
+  ], path);
+  return {
+    tradeId: id(item.tradeId, path + ".tradeId"),
+    giverUserId: player(item.giverUserId, path + ".giverUserId", context.playerIds),
+    receiverUserId: player(item.receiverUserId, path + ".receiverUserId", context.playerIds),
+    givenValue: integer(item.givenValue, path + ".givenValue", 1),
+    returnedValue: integer(item.returnedValue, path + ".returnedValue"),
+    liquidationFor: nullableId(item.liquidationFor, path + ".liquidationFor"),
+    gameVersion: integer(item.gameVersion, path + ".gameVersion", 1),
+  };
+}
+
+function parseIncident(value: unknown, path: string, context: AdvancedRuleParseContext): FairPlayIncident {
+  const item = record(value, path);
+  keys(item, [
+    "kind", "tradeId", "giverUserId", "receiverUserId", "givenValue", "returnedValue", "consequence",
+    "gameVersion", "actionId",
+  ], path);
+  if (item.kind !== "PATTERN" && item.kind !== "DUMP") invalid(path + ".kind", "unknown incident");
+  if (item.consequence !== "WARNING" && item.consequence !== "REMOVAL") {
+    invalid(path + ".consequence", "unknown consequence");
+  }
+  return {
+    kind: item.kind,
+    tradeId: id(item.tradeId, path + ".tradeId"),
+    giverUserId: player(item.giverUserId, path + ".giverUserId", context.playerIds),
+    receiverUserId: player(item.receiverUserId, path + ".receiverUserId", context.playerIds),
+    givenValue: integer(item.givenValue, path + ".givenValue", 1),
+    returnedValue: integer(item.returnedValue, path + ".returnedValue"),
+    consequence: item.consequence,
+    gameVersion: integer(item.gameVersion, path + ".gameVersion", 1),
+    actionId: id(item.actionId, path + ".actionId"),
+  };
+}
+
+function parseFairPlay(value: unknown, context: AdvancedRuleParseContext): FairPlayState {
+  const path = "$.ruleState.fairPlay";
+  const item = record(value, path);
+  keys(item, ["lopsidedTrades", "incidents"], path);
+  const lopsidedTrades = array(item.lopsidedTrades, path + ".lopsidedTrades").map((entry, index) =>
+    parseLopsided(entry, path + ".lopsidedTrades[" + index + "]", context),
+  );
+  if (new Set(lopsidedTrades.map((trade) => trade.tradeId)).size !== lopsidedTrades.length) {
+    invalid(path + ".lopsidedTrades", "a trade is recorded once");
+  }
+  const incidents = array(item.incidents, path + ".incidents").map((entry, index) =>
+    parseIncident(entry, path + ".incidents[" + index + "]", context),
+  );
+  for (const incident of incidents) {
+    const source = lopsidedTrades.find((trade) => trade.tradeId === incident.tradeId);
+    if (source === undefined || source.giverUserId !== incident.giverUserId
+      || source.receiverUserId !== incident.receiverUserId) {
+      invalid(path + ".incidents", "an incident must cite its recorded lopsided trade");
+    }
+  }
+  return { lopsidedTrades, incidents };
 }
 
 function parseOutcome(value: unknown, context: AdvancedRuleParseContext): GameOutcome | null {
@@ -432,6 +513,11 @@ function freezeRuleState(state: AdvancedRuleState): AdvancedRuleState {
     Object.freeze(state.outcome.placements);
     Object.freeze(state.outcome);
   }
+  state.fairPlay.lopsidedTrades.forEach(Object.freeze);
+  state.fairPlay.incidents.forEach(Object.freeze);
+  Object.freeze(state.fairPlay.lopsidedTrades);
+  Object.freeze(state.fairPlay.incidents);
+  Object.freeze(state.fairPlay);
   Object.freeze(state.decks);
   Object.freeze(state.heldCards);
   Object.freeze(state.trades);
@@ -447,6 +533,7 @@ export function parseAdvancedRuleState(
   const root = record(value, "$.ruleState");
   keys(root, [
     "decks", "heldCards", "effectContinuation", "trades", "tradeFacts", "debt", "eliminations", "outcome",
+    "fairPlay",
   ], "$.ruleState");
   const decks = array(root.decks, "$.ruleState.decks").map((value, index): DeckState => {
     const path = "$.ruleState.decks[" + index + "]";
@@ -499,6 +586,7 @@ export function parseAdvancedRuleState(
       parseElimination(fact, index, context),
     ),
     outcome: parseOutcome(root.outcome, context),
+    fairPlay: parseFairPlay(root.fairPlay, context),
   });
 }
 

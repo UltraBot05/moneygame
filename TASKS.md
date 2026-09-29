@@ -276,8 +276,10 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 
 | ID      | Status | Task                                   | Depends                          | Acceptance                                                                     |
 | ------- | ------ | -------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
-| INT-001 | TODO   | FFA fair-play / Collusion Guard policy | RULE-020,FREEZE-001              | approved signals/consequences/visibility frozen; Design ambiguities resolved   |
-| INT-002 | TODO   | deterministic collusion rule engine    | INT-001,RULE-005,014,016,017,019 | deterministic evidence + consequences; no ML; team-authorized play not flagged |
+| INT-001 | DONE   | FFA fair-play / Collusion Guard policy | RULE-020,FREEZE-001              | approved signals/consequences/visibility frozen; Design ambiguities resolved   |
+| INT-002 | DONE   | deterministic collusion rule engine    | INT-001,RULE-005,014,016,017,019 | deterministic evidence + consequences; no ML; team-authorized play not flagged |
+
+**Integrity review (2026-09-29):** INT-001 policy frozen in `docs/architecture/INT-001-FAIR-PLAY-POLICY.md`; INT-002 implemented in `packages/game-core/src/integrity.ts` with state in `ruleState.fairPlay` (persisted and replayed with the game), approved after an adversarial review pass (fix: a trade never produces both a PATTERN and a DUMP incident).
 
 ---
 
