@@ -1,7 +1,6 @@
 /**
- * Values shared by the web client and the worker. Kept transport- and
- * framework-agnostic so both sides depend on a single definition.
+ * Values shared by the web client and the worker: the single wire-protocol definition (RT-002).
+ * Transport- and framework-agnostic so both sides depend on one contract.
  */
 
-/** Wire-protocol version. Bump when the client/worker contract changes. */
-export const PROTOCOL_VERSION = 1;
+export * from "./protocol";

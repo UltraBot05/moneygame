@@ -181,7 +181,7 @@ describe("buildAuthUrl", () => {
         challenge: "c",
       }),
     );
-    expect(url.searchParams.get("scope")).toBe("openid email");
+    expect(url.searchParams.get("scope")).toBe("openid profile");
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("state")).toBe("opaque-state");

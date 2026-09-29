@@ -7,6 +7,7 @@ import {
   type FlowDeps,
 } from "./auth-flow";
 import { createSqlTxnStore } from "./auth-store";
+import type { IdentityStore, UserRecord } from "./identity";
 import { sha256B64url } from "./oidc";
 import {
   createStubProvider,
@@ -22,8 +23,25 @@ const NOW = 1_700_000_000_000;
 const NOW_SEC = Math.floor(NOW / 1000);
 const ORIGIN = "https://app.example";
 
+/** In-memory stand-in for the D1 identity store (d1Identity is tested separately). */
+function memoryIdentity(): IdentityStore & { readonly users: Map<string, UserRecord> } {
+  const users = new Map<string, UserRecord>();
+  return {
+    users,
+    async loginWithGoogle(sub, displayName) {
+      const user = { userId: users.get(sub)?.userId ?? "user-" + (users.size + 1), displayName };
+      users.set(sub, user);
+      return user;
+    },
+    async get(userId) {
+      return [...users.values()].find((user) => user.userId === userId) ?? null;
+    },
+  };
+}
+
 interface Harness {
   deps: FlowDeps;
+  identity: ReturnType<typeof memoryIdentity>;
   provider: StubProvider;
   setIdToken: (t: string) => void;
   signer: ReturnType<typeof createTestSigner>;
@@ -33,8 +51,10 @@ function harness(): Harness {
   const signer = createTestSigner();
   let idToken = "";
   const provider = createStubProvider(signer.jwks, () => idToken);
+  const identity = memoryIdentity();
   const deps: FlowDeps = {
     store: createSqlTxnStore(memorySqlExec()),
+    identity,
     google: provider,
     clientId: AUD,
     sessionSecret: SECRET,
@@ -42,7 +62,7 @@ function harness(): Harness {
     sessionTtlSec: 3600,
     txnTtlSec: 600,
   };
-  return { deps, provider, signer, setIdToken: (t) => (idToken = t) };
+  return { deps, identity, provider, signer, setIdToken: (t) => (idToken = t) };
 }
 
 function cookieValue(setCookie: string): string {
@@ -52,7 +72,7 @@ function cookieValue(setCookie: string): string {
 /** Drives startAuth and returns the state/nonce/binding it minted. */
 async function start(
   h: Harness,
-  room = "abcd",
+  room: string | null = "abcd",
 ): Promise<{ res: Response; state: string; nonce: string; binding: string }> {
   const res = await startAuth(room, null, ORIGIN, h.deps);
   const loc = new URL(res.headers.get("Location") ?? "");
@@ -128,10 +148,28 @@ describe("invite-first auth flow", () => {
     const before = h.provider.configCalls;
     const skip = await startAuth("abcd", `mg_session=${sessionValue}`, ORIGIN, h.deps);
 
-    expect(skip.status).toBe(200);
-    expect(await skip.text()).toContain("google:sub-xyz");
+    expect(skip.status).toBe(302);
+    expect(skip.headers.get("Location")).toBe(roomPath("ABCD"));
     // No new Google round-trip.
     expect(h.provider.configCalls).toBe(before);
+  });
+
+  it("keys the session on the internal user id, never on the Google sub", async () => {
+    const h = harness();
+    const { state, nonce, binding } = await start(h, null);
+    h.setIdToken(h.signer.sign(googleClaims("sub-secret", AUD, NOW_SEC, { nonce, name: "Asha" })));
+    const cbRes = await handleCallback(
+      new URL(`${ORIGIN}/auth/callback?code=c&state=${state}`),
+      `mg_txn=${binding}`,
+      ORIGIN,
+      h.deps,
+    );
+    expect(cbRes.headers.get("Location")).toBe("/");
+    const session = cookieValue(cbRes.headers.getSetCookie().find((c) => c.startsWith("mg_session=")) ?? "");
+    const payload = JSON.parse(atob((session.split(".")[0] ?? "").replace(/-/g, "+").replace(/_/g, "/")));
+    expect(payload.sub).toBe("user-1");
+    expect(session).not.toContain("sub-secret");
+    expect(h.identity.users.get("sub-secret")).toEqual({ userId: "user-1", displayName: "Asha" });
   });
 
   it("does not leak any Google token to the browser", async () => {

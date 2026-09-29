@@ -53,6 +53,8 @@ export interface IdTokenClaims {
   nonce?: string;
   /** Authorized party; present when the token has multiple audiences. */
   azp?: string;
+  /** Display name (scope `profile`); a label only, never an identity key. */
+  name?: string;
 }
 
 export interface VerifyOptions {
@@ -278,10 +280,9 @@ async function loadConfig(fetchFn: Fetcher): Promise<GoogleConfig> {
   };
 }
 
-// `openid` gives the stable `sub` (the identity key); `email` is requested per
-// spike config. Identity is still derived from `sub` only — email is never used
-// as the account key. No profile/offline/refresh or unrelated scopes.
-const OIDC_SCOPE = "openid email";
+// `openid` gives the stable `sub` (the identity key) and `profile` the display name.
+// Email is not requested or stored. No offline/refresh or unrelated scopes.
+const OIDC_SCOPE = "openid profile";
 
 /** Builds the Google authorization redirect URL (no secrets, no room code). */
 export function buildAuthUrl(input: {

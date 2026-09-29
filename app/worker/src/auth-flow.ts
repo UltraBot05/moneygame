@@ -18,6 +18,7 @@ import {
   type GoogleProvider,
 } from "./oidc";
 import type { TransactionStore } from "./auth-store";
+import type { IdentityStore } from "./identity";
 import {
   clearCookie,
   issueSession,
@@ -47,6 +48,7 @@ export function roomPath(roomCode: string): string {
 
 export interface FlowDeps {
   store: TransactionStore;
+  identity: IdentityStore;
   google: GoogleProvider;
   clientId: string;
   sessionSecret: string;
@@ -61,19 +63,23 @@ function redirect(location: string, cookies: string[] = []): Response {
   return new Response(null, { status: 302, headers });
 }
 
+/** Where a finished login lands: the invited room, or the home page. */
+export function returnPath(roomCode: string): string {
+  return roomCode === "" ? "/" : roomPath(roomCode);
+}
+
 /**
- * Entry for `/r/:roomCode`. Serves the room directly if a valid app session is
- * present (no Google round-trip); otherwise opens a new auth transaction and
- * redirects to Google. The room code lives only in the server-side transaction
- * record — never in `state` or the redirect URI.
+ * Entry for `/auth/login?room=CODE` (room optional). A valid app session goes straight back
+ * (no Google round-trip); otherwise a new auth transaction redirects to Google. The room code
+ * lives only in the server-side transaction record, never in `state` or the redirect URI.
  */
 export async function startAuth(
-  rawRoomCode: string,
+  rawRoomCode: string | null,
   cookieHeader: string | null,
   origin: string,
   deps: FlowDeps,
 ): Promise<Response> {
-  const roomCode = sanitizeRoomCode(rawRoomCode);
+  const roomCode = rawRoomCode === null ? "" : sanitizeRoomCode(rawRoomCode);
   if (roomCode === null) {
     return new Response("invalid room code", { status: 400 });
   }
@@ -81,16 +87,8 @@ export async function startAuth(
   const existing = parseCookies(cookieHeader)[SESSION_COOKIE];
   if (existing !== undefined) {
     try {
-      const session = await verifySession(
-        existing,
-        deps.sessionSecret,
-        deps.now(),
-      );
-      // Valid first-party session: skip Google entirely.
-      return new Response(`room ${roomCode} for ${session.sub}`, {
-        status: 200,
-        headers: { "content-type": "text/plain" },
-      });
+      await verifySession(existing, deps.sessionSecret, deps.now());
+      return redirect(returnPath(roomCode));
     } catch {
       // Fall through to re-authenticate on tampered/expired sessions.
     }
@@ -167,31 +165,28 @@ export async function handleCallback(
     redirectUri: `${origin}/auth/callback`,
   });
 
-  let sub: string;
+  let claims: Awaited<ReturnType<typeof verifyIdToken>>;
   try {
-    const claims = await verifyIdToken(idToken, {
+    claims = await verifyIdToken(idToken, {
       jwks,
       audience: deps.clientId,
       nonce: txn.nonce,
       now: deps.now(),
     });
-    sub = claims.sub;
   } catch {
     return new Response("invalid identity", { status: 401 });
   }
 
-  // Stable identity is the Google `sub`, mapped to an internal id. Email is
-  // never used as the key. Profile persistence (META-001) is intentionally out
-  // of scope here.
-  const userId = `google:${sub}`;
+  // The Google `sub` is only the lookup key for the stable internal userId (DATA-001).
+  const user = await deps.identity.loginWithGoogle(claims.sub, claims.name ?? "", deps.now());
   const session = await issueSession(
-    userId,
+    user.userId,
     deps.sessionSecret,
     deps.sessionTtlSec,
     deps.now(),
   );
 
-  return redirect(roomPath(txn.roomCode), [
+  return redirect(returnPath(txn.roomCode), [
     serializeCookie(SESSION_COOKIE, session, { maxAgeSec: deps.sessionTtlSec }),
     clearCookie(TXN_COOKIE),
   ]);

@@ -289,21 +289,23 @@ Evidence: `docs/architecture/ARCH-AUDIT-RECONCILIATION.md`
 
 | ID       | Status | Task                                   | Depends   | Acceptance                                                                |
 | -------- | ------ | -------------------------------------- | --------- | ------------------------------------------------------------------------- |
-| AUTH-001 | TODO   | production auth/session lifecycle      | SPIKE-003 | login/callback/session/logout; Google sub identity; expiry/error cleanup  |
-| DATA-001 | TODO   | identity/profile D1 schema + migration | AUTH-001  | stable internal userId from Google sub; schema exists before finalization |
+| AUTH-001 | DONE   | production auth/session lifecycle      | SPIKE-003 | login/callback/session/logout; Google sub identity; expiry/error cleanup  |
+| DATA-001 | DONE   | identity/profile D1 schema + migration | AUTH-001  | stable internal userId from Google sub; schema exists before finalization |
+
+**E1 review (2026-09-29):** AUTH-001, DATA-001 and RT-001..008 implemented per `docs/architecture/RUNTIME-E1.md` (one-origin Worker + static assets, D1 identity, GameRoom Durable Object over `room-runtime.ts`, shared protocol, per-viewer projection, alarm-driven turn/auction/debt deadlines, explicit REJOIN after an expired lease) and approved after an adversarial review pass. Production D1 creation and deploy are QA-014.
 
 ## Game runtime
 
 | ID     | Status | Task                               | Depends                    | Acceptance                                                                          |
 | ------ | ------ | ---------------------------------- | -------------------------- | ----------------------------------------------------------------------------------- |
-| RT-001 | TODO   | room create/join                   | AUTH-001,CORE-005,RULE-020 | authenticated 3–10 seats; membership/readiness/host/settings authorization; select the >90s expired-reconnect disposition (rejoin/re-seat conditions for authenticated users); test the disposition; preserve current room/game integrity; never silently restore an expired seat lease |
-| RT-002 | TODO   | shared protocol schemas            | CORE-004,011               | one definition web/worker; bounded typed commands/events                            |
-| RT-003 | TODO   | socket upgrade/auth                | AUTH-001,RT-001,002        | valid app session + room membership required                                        |
-| RT-004 | TODO   | serialized command adapter         | RT-003,RULE-019            | actor authorized before mutation/idempotent replay; no logical parallel mutation    |
-| RT-005 | TODO   | transactional snapshot/idempotency | RT-004,SPIKE-002           | state + next gameVersion + idempotency + relevant deadlines commit atomically       |
-| RT-006 | TODO   | hibernation reconstruction         | RT-005,SPIKE-001           | constructor wake reconstructs canonical state safely                                |
-| RT-007 | TODO   | earliest-deadline alarm scheduler  | RT-006                     | no pinning timers; all due work ordered/retry-safe; obsolete deadlines cleared      |
-| RT-008 | TODO   | reconnect/epoch                    | RT-003,005,007,SPIKE-004   | spike behavior integrated with gameplay/auction/debt/turn state                     |
+| RT-001 | DONE   | room create/join                   | AUTH-001,CORE-005,RULE-020 | authenticated 3–10 seats; membership/readiness/host/settings authorization; select the >90s expired-reconnect disposition (rejoin/re-seat conditions for authenticated users); test the disposition; preserve current room/game integrity; never silently restore an expired seat lease |
+| RT-002 | DONE   | shared protocol schemas            | CORE-004,011               | one definition web/worker; bounded typed commands/events                            |
+| RT-003 | DONE   | socket upgrade/auth                | AUTH-001,RT-001,002        | valid app session + room membership required                                        |
+| RT-004 | DONE   | serialized command adapter         | RT-003,RULE-019            | actor authorized before mutation/idempotent replay; no logical parallel mutation    |
+| RT-005 | DONE   | transactional snapshot/idempotency | RT-004,SPIKE-002           | state + next gameVersion + idempotency + relevant deadlines commit atomically       |
+| RT-006 | DONE   | hibernation reconstruction         | RT-005,SPIKE-001           | constructor wake reconstructs canonical state safely                                |
+| RT-007 | DONE   | earliest-deadline alarm scheduler  | RT-006                     | no pinning timers; all due work ordered/retry-safe; obsolete deadlines cleared      |
+| RT-008 | DONE   | reconnect/epoch                    | RT-003,005,007,SPIKE-004   | spike behavior integrated with gameplay/auction/debt/turn state                     |
 | RT-009 | TODO   | host/co-host migration             | RT-008                     | host loss does not lose game; permissions migrate deterministically                 |
 | RT-010 | TODO   | pause/resume                       | RT-007,009                 | authorized pause only; deadline semantics match frozen architecture                 |
 | RT-011 | TODO   | chat/rate limit                    | RT-003                     | bounded/rate-limited; no game mutation                                              |

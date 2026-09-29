@@ -60,8 +60,13 @@ const COMMAND_TYPES = [
   "BUILD", "SELL_DEVELOPMENT", "MORTGAGE", "UNMORTGAGE",
   "DRAW_CARD", "PAY_HOLDING_FEE", "USE_RELEASE_CARD",
   "PROPOSE_TRADE", "COUNTER_TRADE", "ACCEPT_TRADE", "REJECT_TRADE", "CANCEL_TRADE",
-  "DEBT_TIMEOUT", "DECLARE_BANKRUPTCY",
+  "DEBT_TIMEOUT", "DECLARE_BANKRUPTCY", "TURN_TIMEOUT",
 ] as const;
+
+/** Commands only the room runtime may issue (from persisted deadlines), never a client. */
+export const SYSTEM_COMMAND_TYPES: ReadonlySet<string> = new Set([
+  "AUCTION_TIMEOUT", "DEBT_TIMEOUT", "TURN_TIMEOUT",
+]);
 
 export type GameplayCommandType = (typeof COMMAND_TYPES)[number];
 
@@ -171,6 +176,12 @@ export type GameplayEvent =
       readonly eliminations: readonly EliminationFact[];
     }
   | {
+      /** A turn deadline expired: the owner's default moves, in order, as one committed step. */
+      readonly type: "TURN_AUTO_PLAYED";
+      readonly playerId: string;
+      readonly steps: readonly GameplayEvent[];
+    }
+  | {
       readonly type: "PLAYER_BANKRUPT";
       readonly fact: EliminationFact;
       /** INT-001 dump incidents and the removals they caused in the same transition. */
@@ -229,7 +240,9 @@ export type GameplayRejectionReason =
   | "DEBT_BLOCKED"
   | "DEBT_NOT_ACTIVE"
   | "DEBT_DEADLINE_NOT_EXPIRED"
-  | "STALE_DEBT_TIMEOUT";
+  | "STALE_DEBT_TIMEOUT"
+  | "STALE_TURN_TIMEOUT"
+  | "NOTHING_TO_AUTO_PLAY";
 
 export type GameplayCommandResult =
   | {
@@ -1812,6 +1825,45 @@ function outstandingDebt(state: GameState, resolutionId: string) {
   return pending?.resolutionId === resolutionId && pending.obligation !== null ? pending.obligation : null;
 }
 
+/**
+ * The runtime's turn deadline expired (RUNTIME-E1 section 6). Plays the owner's default moves with
+ * the ordinary handlers until the turn passes or someone else must decide (an auction) or a debt is
+ * outstanding: roll (a Holding attempt if held), draw a pending card, decline a purchase, end the turn.
+ */
+function timeoutTurn(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["turnId"]);
+  const turnId = payloadIdentifier(payload.turnId, "payload.turnId");
+  if (state.phase !== "ACTIVE_TURN" || state.turn?.turnId !== turnId) return rejected(state, "STALE_TURN_TIMEOUT");
+  const owner = state.turn.activePlayerId;
+  const as = (movePayload: unknown): RuleEnv => ({
+    ...env, actorUserId: owner, command: { ...env.command, payload: movePayload },
+  });
+  const steps: GameplayEvent[] = [];
+  let current = state;
+  // A turn has at most three rolls, one card draw per landing, and an end; 12 bounds the loop.
+  for (let step = 0; step < 12 && current.phase === "ACTIVE_TURN" && current.turn?.turnId === turnId; step += 1) {
+    const pending = current.pendingResolution;
+    const turn = current.turn;
+    let move: GameplayCommandResult;
+    if (pending === null) {
+      move = !turn.hasRolled || turn.rollAgain
+        ? rollCurrentPlayer(current, as({}))
+        : endCurrentTurn(current, as({}));
+    } else if (pending.kind === "CARD" && pending.obligation === null) {
+      move = drawPendingCard(current, as({ resolutionId: pending.resolutionId }));
+    } else if (pending.kind === "BUY_DECISION") {
+      move = declineProperty(current, as({ resolutionId: pending.resolutionId }));
+    } else {
+      break;
+    }
+    if (move.kind !== "ACCEPTED") break;
+    steps.push(move.event);
+    current = move.state;
+  }
+  if (steps.length === 0) return rejected(state, "NOTHING_TO_AUTO_PLAY");
+  return accepted(current, { type: "TURN_AUTO_PLAYED", playerId: owner, steps });
+}
+
 /** The debtor may give up at any time while in debt. */
 function declareBankruptcy(state: GameState, env: RuleEnv): GameplayCommandResult {
   const payload = payloadObject(env.command, ["resolutionId"]);
@@ -1919,5 +1971,6 @@ export function applyGameplayCommand(
     case "CANCEL_TRADE": return closeTrade(state, env, "CANCELLED");
     case "DEBT_TIMEOUT": return timeoutDebt(state, env);
     case "DECLARE_BANKRUPTCY": return declareBankruptcy(state, env);
+    case "TURN_TIMEOUT": return timeoutTurn(state, env);
   }
 }
