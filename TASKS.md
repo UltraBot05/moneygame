@@ -415,6 +415,7 @@ POST-005 finite building scarcity
 POST-006 stronger full-set rent
 POST-007 Auction Hub late-game variant
 POST-008 Gift/Choice expansion
+POST-009 timed game mode (round or clock limit with a net-worth result; owner request 2026-09-29)
 ```
 
 Every module must test interactions with all already-shipped systems it touches.

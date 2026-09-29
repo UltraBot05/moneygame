@@ -238,3 +238,14 @@ Decided by the product owner for RULE-011, 012, 016, 017, 018, and 019, followin
   - the winning team;
   - placements, with survivors in seat order and then eliminations newest first.
 - Every later command is refused. Round and time limits and any tie-break are deferred.
+
+## 11. Owner decisions after the freeze (2026-09-29)
+
+- **Resign.** Any active player may leave a running match with `RESIGN`. With an outstanding debt it is
+  exactly a declared bankruptcy (the creditor is paid); otherwise the player's cash and deeds return to
+  the bank like a Collusion Guard removal, recorded as elimination reason `RESIGNED`. It is refused while
+  an auction is live, and the match ends normally if one player or team remains. Reason: tables finish
+  by players dropping out when they are done, because the rules have no length limit.
+- **No length limit, by choice.** A table that never trades can play indefinitely; the owner accepts
+  this (players resign when bored). A timed game mode is a possible later module (backlog POST-009).
+
