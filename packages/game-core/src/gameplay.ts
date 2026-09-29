@@ -1,4 +1,18 @@
+import {
+  freezeTrade,
+  initializeDecks,
+  MAX_RESOLUTION_STEPS,
+  returnHeldCard,
+  runEffectFrames,
+  type AdvancedRuleState,
+  type EffectDiagnostic,
+  type EffectFrame,
+  type TradeBundle,
+  type TradeFact,
+  type TradeState,
+} from "./advanced-rules";
 import { parseBoardDefinition, type BoardDefinition } from "./board";
+import type { CardCatalogDefinition } from "./cards";
 import {
   classifyGameCommand,
   CommandValidationError,
@@ -7,6 +21,7 @@ import {
   type GameCommand,
 } from "./command";
 import { rollDice, type DiceRoll } from "./dice";
+import { CANDIDATE_RULES } from "./economy";
 import { evaluateLobbyStart } from "./lobby";
 import { calculateMovement, type MovementResult } from "./movement";
 import type { RandomSource } from "./random";
@@ -19,22 +34,35 @@ import {
   unmortgageCost,
 } from "./rules";
 import {
+  holdingTileIndex,
   parseGameState,
   type AuctionFact,
   type AuctionState,
   type AssetState,
   type GameState,
   type MatchSettings,
+  type MonetaryObligation,
   type PlayerState,
   type PendingResolution,
+  type ResolutionContinuation,
   type TurnIdentity,
 } from "./state";
 import { dispatchLandedTile, type TileResolution } from "./tile-dispatch";
 
-export type GameplayCommandType =
-  | "CONFIGURE_MATCH" | "START_GAME" | "ROLL_DICE" | "END_TURN"
-  | "BUY_PROPERTY" | "DECLINE_PROPERTY" | "PLACE_BID" | "PASS_AUCTION"
-  | "AUCTION_TIMEOUT" | "BUILD" | "MORTGAGE" | "UNMORTGAGE";
+const COMMAND_TYPES = [
+  "CONFIGURE_MATCH", "START_GAME", "ROLL_DICE", "END_TURN",
+  "BUY_PROPERTY", "DECLINE_PROPERTY", "PLACE_BID", "PASS_AUCTION", "AUCTION_TIMEOUT",
+  "BUILD", "SELL_DEVELOPMENT", "MORTGAGE", "UNMORTGAGE",
+  "DRAW_CARD", "PAY_HOLDING_FEE", "USE_RELEASE_CARD",
+  "PROPOSE_TRADE", "COUNTER_TRADE", "ACCEPT_TRADE", "REJECT_TRADE", "CANCEL_TRADE",
+  "DEBT_TIMEOUT",
+] as const;
+
+export type GameplayCommandType = (typeof COMMAND_TYPES)[number];
+
+const EMPTY_PAYLOAD_COMMANDS: ReadonlySet<string> = new Set([
+  "START_GAME", "ROLL_DICE", "END_TURN", "PAY_HOLDING_FEE",
+]);
 
 export interface GameplayCommandContext {
   readonly actorUserId: string;
@@ -43,7 +71,13 @@ export interface GameplayCommandContext {
   readonly appliedActions?: readonly AppliedActionRecord[];
   readonly currentTime?: number;
   readonly auctionDecisionDeadlineAt?: number;
+  /** Absolute deadline assigned to any obligation this command creates (runtime-supplied). */
+  readonly debtDeadlineAt?: number;
+  /** Required once a game has card state; absent means cards cannot be drawn. */
+  readonly cardCatalog?: CardCatalogDefinition;
 }
+
+export type HoldingOutcome = "ENTERED" | "RELEASED" | "ATTEMPT_FAILED" | "FEE_DUE";
 
 export type GameplayEvent =
   | {
@@ -55,8 +89,9 @@ export type GameplayEvent =
       readonly type: "DICE_ROLLED";
       readonly playerId: string;
       readonly roll: DiceRoll;
-      readonly movement: MovementResult;
-      readonly resolution: TileResolution;
+      readonly movement: MovementResult | null;
+      readonly resolution: TileResolution | null;
+      readonly holding: HoldingOutcome | null;
     }
   | {
       readonly type: "TURN_ENDED";
@@ -101,10 +136,41 @@ export type GameplayEvent =
       readonly price: number;
     }
   | {
+      readonly type: "DEVELOPMENT_SOLD";
+      readonly playerId: string;
+      readonly assetId: string;
+      readonly level: number;
+      readonly amount: number;
+      readonly debtSettled: boolean;
+    }
+  | {
       readonly type: "ASSET_MORTGAGED" | "ASSET_UNMORTGAGED";
       readonly playerId: string;
       readonly assetId: string;
       readonly amount: number;
+      readonly debtSettled: boolean;
+    }
+  | {
+      readonly type: "CARD_RESOLVED";
+      readonly playerId: string;
+      readonly drawnCardIds: readonly string[];
+      readonly outcome: "COMPLETED" | "SUSPENDED";
+    }
+  | {
+      readonly type: "HOLDING_RELEASED";
+      readonly playerId: string;
+      readonly method: "FEE" | "CARD";
+      readonly cardId: string | null;
+    }
+  | {
+      readonly type: "TRADE_UPDATED";
+      readonly fact: TradeFact;
+      readonly debtSettled: boolean;
+    }
+  | {
+      readonly type: "DEBT_HANDOFF";
+      readonly resolutionId: string;
+      readonly obligation: MonetaryObligation;
     };
 
 export type GameplayRejectionReason =
@@ -129,8 +195,11 @@ export type GameplayRejectionReason =
   | "INCOMPLETE_SET"
   | "SET_MORTGAGED"
   | "UNEVEN_BUILD"
+  | "UNEVEN_SALE"
   | "DEVELOPMENT_LIMIT_REACHED"
   | "PLAYER_IN_HOLDING"
+  | "NOT_IN_HOLDING"
+  | "HELD_CARD_NOT_OWNED"
   | "ALREADY_MORTGAGED"
   | "NOT_MORTGAGED"
   | "SET_HAS_DEVELOPMENT"
@@ -140,7 +209,20 @@ export type GameplayRejectionReason =
   | "BID_EXCEEDS_CASH"
   | "AUCTION_DEADLINE_NOT_EXPIRED"
   | "STALE_AUCTION_TIMEOUT"
-  | "AUCTION_SETTLEMENT_UNAFFORDABLE";
+  | "AUCTION_SETTLEMENT_UNAFFORDABLE"
+  | "CARD_CATALOG_UNAVAILABLE"
+  | "EFFECT_CHAIN_FAILED"
+  | "TRADE_NOT_OPEN"
+  | "NOT_TRADE_PARTICIPANT"
+  | "INVALID_TRADE_PARTNER"
+  | "EMPTY_TRADE"
+  | "TRADE_BLOCKED_DURING_AUCTION"
+  | "ASSET_IN_PENDING_RESOLUTION"
+  | "DEBT_BLOCKED"
+  | "DEBT_HANDOFF_PENDING"
+  | "DEBT_NOT_ACTIVE"
+  | "DEBT_DEADLINE_NOT_EXPIRED"
+  | "STALE_DEBT_TIMEOUT";
 
 export type GameplayCommandResult =
   | {
@@ -159,7 +241,38 @@ export type GameplayCommandResult =
       readonly reason: GameplayRejectionReason;
       readonly currentGameId?: string;
       readonly currentGameVersion?: number;
+      readonly diagnostic?: EffectDiagnostic;
     };
+
+/** Authoritative inputs shared by every handler of one command. */
+interface RuleEnv {
+  readonly board: BoardDefinition;
+  readonly catalog: CardCatalogDefinition | undefined;
+  readonly context: GameplayCommandContext;
+  readonly command: GameCommand;
+  readonly actorUserId: string;
+  readonly nextGameVersion: number;
+}
+
+/** Mutable-by-copy working set for multi-step transitions inside one command. */
+interface Draft {
+  readonly players: readonly PlayerState[];
+  readonly assets: readonly AssetState[];
+  readonly turn: TurnIdentity;
+  readonly pendingResolution: PendingResolution | null;
+  readonly ruleState: AdvancedRuleState;
+}
+
+type Changes = Readonly<{
+  phase?: GameState["phase"];
+  turn?: TurnIdentity | null;
+  players?: readonly PlayerState[];
+  assets?: readonly AssetState[];
+  settings?: MatchSettings;
+  pendingResolution?: PendingResolution | null;
+  auction?: AuctionState | null;
+  ruleState?: AdvancedRuleState;
+}>;
 
 function identifier(value: string, field: string): string {
   if (value.trim().length === 0) {
@@ -169,33 +282,12 @@ function identifier(value: string, field: string): string {
 }
 
 function gameplayCommand(command: GameCommand): GameplayCommandType {
-  if (
-    command.type !== "CONFIGURE_MATCH"
-    && command.type !== "START_GAME"
-    && command.type !== "ROLL_DICE"
-    && command.type !== "END_TURN"
-    && command.type !== "BUY_PROPERTY"
-    && command.type !== "DECLINE_PROPERTY"
-    && command.type !== "PLACE_BID"
-    && command.type !== "PASS_AUCTION"
-    && command.type !== "AUCTION_TIMEOUT"
-    && command.type !== "BUILD"
-    && command.type !== "MORTGAGE"
-    && command.type !== "UNMORTGAGE"
-  ) {
+  const type = COMMAND_TYPES.find((candidate) => candidate === command.type);
+  if (type === undefined) {
     throw new CommandValidationError("type", "unknown gameplay command " + command.type);
   }
-  if (command.type === "START_GAME" || command.type === "ROLL_DICE" || command.type === "END_TURN") {
-    if (
-      typeof command.payload !== "object"
-      || command.payload === null
-      || Array.isArray(command.payload)
-      || Object.keys(command.payload).length !== 0
-    ) {
-      throw new CommandValidationError("payload", "expected an empty object");
-    }
-  }
-  return command.type;
+  if (EMPTY_PAYLOAD_COMMANDS.has(type)) payloadObject(command, []);
+  return type;
 }
 
 function payloadObject(command: GameCommand, keys: readonly string[]): Record<string, unknown> {
@@ -226,12 +318,51 @@ function payloadIdentifier(value: unknown, field: string): string {
   return value;
 }
 
+function payloadBundle(value: unknown, field: string): TradeBundle {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new CommandValidationError(field, "expected an object");
+  }
+  const bundle = value as Record<string, unknown>;
+  const keys = Object.keys(bundle);
+  if (keys.length !== 2 || !keys.includes("cash") || !keys.includes("assetIds")) {
+    throw new CommandValidationError(field, "expected exactly cash and assetIds");
+  }
+  if (!Number.isSafeInteger(bundle.cash) || (bundle.cash as number) < 0) {
+    throw new CommandValidationError(field + ".cash", "expected a non-negative safe integer");
+  }
+  if (!Array.isArray(bundle.assetIds)) {
+    throw new CommandValidationError(field + ".assetIds", "expected an array");
+  }
+  const assetIds = bundle.assetIds.map((assetId, index) =>
+    payloadIdentifier(assetId, field + ".assetIds[" + index + "]"),
+  );
+  if (new Set(assetIds).size !== assetIds.length) {
+    throw new CommandValidationError(field + ".assetIds", "contains a duplicate");
+  }
+  return { cash: bundle.cash as number, assetIds };
+}
+
+function authoritativeInteger(value: unknown, field: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new CommandValidationError(field, "expected a non-negative safe integer");
+  }
+  return value as number;
+}
+
 function rejected(
   state: GameState,
   reason: GameplayRejectionReason,
-  details: Readonly<{ currentGameId?: string; currentGameVersion?: number }> = {},
+  details: Readonly<{
+    currentGameId?: string;
+    currentGameVersion?: number;
+    diagnostic?: EffectDiagnostic;
+  }> = {},
 ): GameplayCommandResult {
   return Object.freeze({ kind: "REJECTED", state, reason, ...details });
+}
+
+function accepted(state: GameState, event: GameplayEvent): GameplayCommandResult {
+  return Object.freeze({ kind: "ACCEPTED", state, event: Object.freeze(event) });
 }
 
 function nextTurn(turnNumber: number, activePlayerId: string): TurnIdentity {
@@ -243,93 +374,122 @@ function nextTurn(turnNumber: number, activePlayerId: string): TurnIdentity {
     rollAgain: false,
     consecutiveDoubles: 0,
     developmentActionsUsed: 0,
+    rollFromHolding: false,
   };
 }
 
-function acceptedState(
-  state: GameState,
-  board: BoardDefinition,
-  nextGameVersion: number,
-  changes: Readonly<{
-    phase?: GameState["phase"];
-    turn?: TurnIdentity | null;
-    players?: readonly PlayerState[];
-    assets?: readonly AssetState[];
-    settings?: MatchSettings;
-    pendingResolution?: PendingResolution | null;
-    auction?: AuctionState | null;
-  }>,
-): GameState {
+/**
+ * Builds and fully revalidates the next canonical state. Debt metadata is derived here, once:
+ * a new obligation receives the runtime deadline; a cleared obligation drops it.
+ */
+function acceptedState(state: GameState, env: RuleEnv, changes: Changes): GameState {
+  const pendingResolution = "pendingResolution" in changes
+    ? changes.pendingResolution ?? null
+    : state.pendingResolution;
+  const ruleState = changes.ruleState ?? state.ruleState;
+  let debt = null;
+  if (pendingResolution?.obligation != null) {
+    debt = ruleState.debt?.resolutionId === pendingResolution.resolutionId
+      ? ruleState.debt
+      : {
+          resolutionId: pendingResolution.resolutionId,
+          deadlineAt: authoritativeInteger(env.context.debtDeadlineAt, "context.debtDeadlineAt"),
+          bankruptcyRequired: false,
+        };
+  }
   return parseGameState(
     {
       ...state,
       ...changes,
-      gameVersion: nextGameVersion,
+      ruleState: { ...ruleState, debt },
+      gameVersion: env.nextGameVersion,
     },
-    board,
+    env.board,
+    env.catalog,
   );
 }
 
-function resolutionContinuation(roll: DiceRoll): PendingResolution["continuation"] {
-  return roll.doubles ? { type: "ROLL_AGAIN" } : { type: "END_TURN" };
-}
-
-function pendingForLanding(
-  state: GameState,
-  turn: TurnIdentity,
-  playerId: string,
-  roll: DiceRoll,
-  resolution: TileResolution,
-  nextGameVersion: number,
-): PendingResolution | null {
-  let kind: PendingResolution["kind"] | null = null;
-  if (
-    resolution.kind === "PROPERTY"
-    || resolution.kind === "TRANSIT"
-    || resolution.kind === "UTILITY"
-  ) {
-    const asset = state.assets.find((candidate) => candidate.tileIndex === resolution.tileIndex);
-    if (asset === undefined) throw new RangeError("landed ownable has no canonical asset");
-    if (asset.ownerUserId === null) kind = "BUY_DECISION";
-    else if (asset.ownerUserId !== playerId && !asset.mortgaged) kind = "RENT";
-  } else if (resolution.kind === "TAX") {
-    kind = "TAX";
-  } else if (resolution.kind === "SURPRISE" || resolution.kind === "TREASURE") {
-    kind = "CARD";
-  }
-  if (kind === null) return null;
+function draftOf(state: GameState, turn: TurnIdentity): Draft {
   return {
-    resolutionId: turn.turnId + ":landing:" + nextGameVersion,
-    kind,
-    actorUserId: playerId,
-    decisionOwnerUserId: playerId,
-    source: { type: "TILE", tileIndex: resolution.tileIndex },
-    continuation: resolutionContinuation(roll),
-    roll,
-    obligation: null,
+    players: state.players,
+    assets: state.assets,
+    turn,
+    pendingResolution: state.pendingResolution,
+    ruleState: state.ruleState,
   };
 }
 
-function applyCharge(
+function continuationFor(turn: TurnIdentity): ResolutionContinuation {
+  return turn.rollAgain ? { type: "ROLL_AGAIN" } : { type: "END_TURN" };
+}
+
+function updatePlayer(
   players: readonly PlayerState[],
-  turn: TurnIdentity,
+  userId: string,
+  update: (player: PlayerState) => PlayerState,
+): readonly PlayerState[] {
+  return players.map((player) => player.userId === userId ? update(player) : player);
+}
+
+function checkedCash(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new RangeError("cash exceeds canonical range");
+  return value;
+}
+
+function enterHolding(draft: Draft, env: RuleEnv, userId: string): Draft {
+  const position = holdingTileIndex(env.board);
+  return {
+    ...draft,
+    players: updatePlayer(draft.players, userId, (player) => ({
+      ...player, position, inHolding: true, holdingAttempts: 0,
+    })),
+    turn: { ...draft.turn, rollAgain: false, consecutiveDoubles: 0 },
+    pendingResolution: null,
+  };
+}
+
+function moveActor(
+  draft: Draft,
+  env: RuleEnv,
+  userId: string,
+  distance: number,
+): Readonly<{ draft: Draft; movement: MovementResult }> {
+  const player = draft.players.find((candidate) => candidate.userId === userId);
+  if (player === undefined) throw new RangeError("moving player is not in the game");
+  const movement = calculateMovement(env.board, player.position, distance);
+  return {
+    movement,
+    draft: {
+      ...draft,
+      players: updatePlayer(draft.players, userId, (candidate) => ({
+        ...candidate,
+        position: movement.to,
+        cash: checkedCash(candidate.cash + movement.startAward),
+      })),
+    },
+  };
+}
+
+/** Charges now, or records the full amount as the single outstanding obligation. */
+function charge(
+  draft: Draft,
+  env: RuleEnv,
   debtorUserId: string,
   amount: number,
   creditorUserId: string | null,
   roll: DiceRoll,
   tileIndex: number,
-  nextGameVersion: number,
-): Readonly<{ players: readonly PlayerState[]; pendingResolution: PendingResolution | null }> {
+): Draft {
   if (!Number.isSafeInteger(amount) || amount < 0) throw new RangeError("charge must be non-negative");
-  if (amount === 0) return { players, pendingResolution: null };
-  const debtor = players.find((player) => player.userId === debtorUserId);
+  if (amount === 0) return draft;
+  const debtor = draft.players.find((player) => player.userId === debtorUserId);
   if (debtor === undefined) throw new RangeError("charge debtor is not a game player");
-  const continuation = resolutionContinuation(roll);
+  const continuation = continuationFor(draft.turn);
   if (debtor.cash < amount) {
     return {
-      players,
+      ...draft,
       pendingResolution: {
-        resolutionId: turn.turnId + ":debt:" + nextGameVersion,
+        resolutionId: draft.turn.turnId + ":debt:" + env.nextGameVersion,
         kind: "DEBT",
         actorUserId: debtorUserId,
         decisionOwnerUserId: debtorUserId,
@@ -347,30 +507,209 @@ function applyCharge(
       },
     };
   }
-  const nextPlayers = players.map((player) => {
-    if (player.userId === debtorUserId) return { ...player, cash: player.cash - amount };
-    if (creditorUserId !== null && player.userId === creditorUserId) {
-      const cash = player.cash + amount;
-      if (!Number.isSafeInteger(cash)) throw new RangeError("creditor cash exceeds safe integer range");
-      return { ...player, cash };
-    }
-    return player;
-  });
-  return { players: nextPlayers, pendingResolution: null };
+  return {
+    ...draft,
+    players: draft.players.map((player) => {
+      if (player.userId === debtorUserId) return { ...player, cash: player.cash - amount };
+      if (player.userId === creditorUserId) return { ...player, cash: checkedCash(player.cash + amount) };
+      return player;
+    }),
+  };
 }
 
-function configureMatch(
+function isGoToHolding(board: BoardDefinition, tileIndex: number): boolean {
+  const tile = board.economyProfile.tiles[tileIndex];
+  return tile?.type === "corner" && tile.name === "GO TO HOLDING";
+}
+
+/** Resolves the actor's current tile exactly as a dice landing, whatever moved them there. */
+function resolveLanding(
   state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  actorUserId: string,
-  nextGameVersion: number,
-): GameplayCommandResult {
+  env: RuleEnv,
+  draft: Draft,
+  userId: string,
+  roll: DiceRoll,
+): Readonly<{ draft: Draft; resolution: TileResolution; enteredHolding: boolean }> {
+  const player = draft.players.find((candidate) => candidate.userId === userId);
+  if (player === undefined) throw new RangeError("landing player is not in the game");
+  const tileIndex = player.position;
+  const resolution = dispatchLandedTile(env.board, tileIndex);
+  const decision = (kind: PendingResolution["kind"]): Draft => ({
+    ...draft,
+    pendingResolution: {
+      resolutionId: draft.turn.turnId + ":landing:" + env.nextGameVersion,
+      kind,
+      actorUserId: userId,
+      decisionOwnerUserId: userId,
+      source: { type: "TILE", tileIndex },
+      continuation: continuationFor(draft.turn),
+      roll,
+      obligation: null,
+    },
+  });
+  const result = (next: Draft, enteredHolding = false) => ({ draft: next, resolution, enteredHolding });
+  switch (resolution.kind) {
+    case "PROPERTY":
+    case "TRANSIT":
+    case "UTILITY": {
+      const asset = draft.assets.find((candidate) => candidate.tileIndex === tileIndex);
+      if (asset === undefined) throw new RangeError("landed ownable has no canonical asset");
+      if (asset.ownerUserId === null) return result(decision("BUY_DECISION"));
+      if (asset.ownerUserId === userId || asset.mortgaged) return result(draft);
+      const rent = rentForAsset({ ...state, assets: draft.assets }, env.board, asset, roll.total);
+      return result(charge(draft, env, userId, rent, asset.ownerUserId, roll, tileIndex));
+    }
+    case "TAX":
+      return result(charge(draft, env, userId, resolution.amount, null, roll, tileIndex));
+    case "SURPRISE":
+    case "TREASURE":
+      return result(decision("CARD"));
+    case "STRUCTURAL_CORNER":
+      return isGoToHolding(env.board, tileIndex)
+        ? result(enterHolding(draft, env, userId), true)
+        : result(draft);
+    case "GRAND_SPECIAL":
+      return result(draft);
+  }
+}
+
+type EffectApplication =
+  | {
+      readonly kind: "APPLIED";
+      readonly draft: Draft;
+      readonly outcome: "COMPLETED" | "SUSPENDED";
+      readonly drawnCardIds: readonly string[];
+    }
+  | { readonly kind: "FAILED"; readonly diagnostic: EffectDiagnostic };
+
+function runEffects(
+  state: GameState,
+  env: RuleEnv,
+  catalog: CardCatalogDefinition,
+  draft: Draft,
+  frames: readonly EffectFrame[],
+  remainingSteps: number,
+  originTileIndex: number,
+  roll: DiceRoll,
+): EffectApplication {
+  const actorUserId = draft.turn.activePlayerId;
+  const run = runEffectFrames({
+    board: env.board,
+    catalog,
+    players: draft.players,
+    assets: draft.assets,
+    ruleState: draft.ruleState,
+    actorUserId,
+    frames,
+    remainingSteps,
+    rng: env.context.rng,
+  });
+  if (run.kind === "FAILED") return run;
+  if (run.kind === "SUSPENDED") {
+    const resolutionId = draft.turn.turnId + ":effect:" + env.nextGameVersion;
+    const continuation: ResolutionContinuation = { type: "RESUME_EFFECT", effectId: run.effectId };
+    return {
+      kind: "APPLIED",
+      outcome: "SUSPENDED",
+      drawnCardIds: run.drawnCardIds,
+      draft: {
+        ...draft,
+        players: run.players,
+        ruleState: {
+          ...run.ruleState,
+          effectContinuation: {
+            resolutionId,
+            actorUserId,
+            originTileIndex,
+            remainingSteps: run.remainingSteps,
+            frames: run.frames,
+            roll,
+          },
+        },
+        pendingResolution: {
+          resolutionId,
+          kind: "DEBT",
+          actorUserId,
+          decisionOwnerUserId: actorUserId,
+          source: { type: "EFFECT", effectId: run.effectId, originTileIndex },
+          continuation,
+          roll: null,
+          obligation: {
+            debtorUserId: actorUserId,
+            creditor: { type: "BANK" },
+            amount: run.amount,
+            continuation,
+          },
+        },
+      },
+    };
+  }
+  let next: Draft = {
+    ...draft,
+    players: run.players,
+    ruleState: { ...run.ruleState, effectContinuation: null },
+    pendingResolution: null,
+  };
+  if (run.terminal?.type === "ENTER_HOLDING") next = enterHolding(next, env, actorUserId);
+  else if (run.terminal?.type === "LAND") next = resolveLanding(state, env, next, actorUserId, roll).draft;
+  return { kind: "APPLIED", outcome: "COMPLETED", drawnCardIds: run.drawnCardIds, draft: next };
+}
+
+type Settlement =
+  | { readonly kind: "APPLIED"; readonly draft: Draft; readonly settled: boolean }
+  | { readonly kind: "FAILED"; readonly diagnostic: EffectDiagnostic };
+
+/**
+ * Pays the outstanding obligation as soon as the debtor can cover it, then continues exactly
+ * where the obligation interrupted play. Never forgives, never partially pays.
+ */
+function settleObligation(state: GameState, env: RuleEnv, draft: Draft): Settlement {
+  const pending = draft.pendingResolution;
+  const obligation = pending?.obligation ?? null;
+  const unchanged: Settlement = { kind: "APPLIED", draft, settled: false };
+  if (pending === null || obligation === null || draft.ruleState.debt?.bankruptcyRequired) return unchanged;
+  const debtor = draft.players.find((player) => player.userId === obligation.debtorUserId);
+  if (debtor === undefined || debtor.cash < obligation.amount) return unchanged;
+  const creditorUserId = obligation.creditor.type === "PLAYER" ? obligation.creditor.userId : null;
+  let next: Draft = {
+    ...draft,
+    pendingResolution: null,
+    players: draft.players.map((player) => {
+      if (player.userId === obligation.debtorUserId) return { ...player, cash: player.cash - obligation.amount };
+      if (player.userId === creditorUserId) return { ...player, cash: checkedCash(player.cash + obligation.amount) };
+      return player;
+    }),
+  };
+  if (pending.continuation.type === "RESUME_EFFECT") {
+    const suspended = draft.ruleState.effectContinuation;
+    if (suspended === null || env.catalog === undefined) {
+      throw new RangeError("suspended effect lacks its persisted continuation or catalog");
+    }
+    next = { ...next, ruleState: { ...next.ruleState, effectContinuation: null } };
+    const resumed = runEffects(
+      state, env, env.catalog, next, suspended.frames, suspended.remainingSteps,
+      suspended.originTileIndex, suspended.roll,
+    );
+    return resumed.kind === "FAILED" ? resumed : { kind: "APPLIED", draft: resumed.draft, settled: true };
+  }
+  if (pending.kind === "DETENTION_FEE" && pending.roll !== null) {
+    next = { ...next, players: releaseFromHolding(next.players, obligation.debtorUserId) };
+    const moved = moveActor(next, env, obligation.debtorUserId, pending.roll.total);
+    next = resolveLanding(state, env, moved.draft, obligation.debtorUserId, pending.roll).draft;
+  }
+  return { kind: "APPLIED", draft: next, settled: true };
+}
+
+function releaseFromHolding(players: readonly PlayerState[], userId: string): readonly PlayerState[] {
+  return updatePlayer(players, userId, (player) => ({ ...player, inHolding: false, holdingAttempts: 0 }));
+}
+
+function configureMatch(state: GameState, env: RuleEnv): GameplayCommandResult {
   if (state.phase !== "STARTING") return rejected(state, "SETTINGS_LOCKED");
-  if (!state.players.some((player) => player.userId === actorUserId)) {
+  if (!state.players.some((player) => player.userId === env.actorUserId)) {
     return rejected(state, "ACTOR_NOT_IN_GAME");
   }
-  const payload = payloadObject(command, ["matchMode", "winMode", "startingCash"]);
+  const payload = payloadObject(env.command, ["matchMode", "winMode", "startingCash"]);
   const settings: MatchSettings = {
     matchMode: payload.matchMode === "FFA" || payload.matchMode === "TEAMS"
       ? payload.matchMode
@@ -381,25 +720,17 @@ function configureMatch(
     startingCash: typeof payload.startingCash === "number" ? payload.startingCash : Number.NaN,
     pacing: "CORE",
   };
-  const nextState = acceptedState(state, board, nextGameVersion, {
+  const nextState = acceptedState(state, env, {
     settings,
     players: state.players.map((player) => ({ ...player, cash: settings.startingCash })),
   });
-  return Object.freeze({
-    kind: "ACCEPTED",
-    state: nextState,
-    event: Object.freeze({ type: "MATCH_CONFIGURED", settings: nextState.settings }),
-  });
+  return accepted(nextState, { type: "MATCH_CONFIGURED", settings: nextState.settings });
 }
-function startGame(
-  state: GameState,
-  board: BoardDefinition,
-  actorUserId: string,
-  nextGameVersion: number,
-): GameplayCommandResult {
+
+function startGame(state: GameState, env: RuleEnv): GameplayCommandResult {
   if (state.phase === "GAME_OVER") return rejected(state, "GAME_ALREADY_ENDED");
   if (state.phase !== "STARTING") return rejected(state, "GAME_ALREADY_STARTED");
-  if (!state.players.some((player) => player.userId === actorUserId)) {
+  if (!state.players.some((player) => player.userId === env.actorUserId)) {
     return rejected(state, "ACTOR_NOT_IN_GAME");
   }
 
@@ -412,115 +743,199 @@ function startGame(
   const activePlayerId = turnOrder[0];
   if (activePlayerId === undefined) return rejected(state, "GAME_NOT_STARTABLE");
 
-  const nextState = acceptedState(state, board, nextGameVersion, {
+  const nextState = acceptedState(state, env, {
     phase: "ACTIVE_TURN",
     turn: nextTurn(1, activePlayerId),
   });
-  return Object.freeze({
-    kind: "ACCEPTED",
-    state: nextState,
-    event: Object.freeze({
-      type: "GAME_STARTED",
-      turnOrder: Object.freeze(turnOrder),
-      activePlayerId,
-    }),
+  return accepted(nextState, {
+    type: "GAME_STARTED",
+    turnOrder: Object.freeze(turnOrder),
+    activePlayerId,
   });
 }
 
-function rollCurrentPlayer(
-  state: GameState,
-  board: BoardDefinition,
-  actorUserId: string,
-  rng: RandomSource,
-  nextGameVersion: number,
-): GameplayCommandResult {
-  if (state.phase === "STARTING") return rejected(state, "GAME_NOT_STARTED");
-  if (state.phase === "GAME_OVER") return rejected(state, "GAME_ALREADY_ENDED");
-  const turn = state.turn;
-  if (turn === null) return rejected(state, "GAME_NOT_STARTED");
-  if (turn.activePlayerId !== actorUserId) return rejected(state, "NOT_YOUR_TURN");
-  if (state.pendingResolution !== null) return rejected(state, "PENDING_RESOLUTION");
-  if (turn.hasRolled && !turn.rollAgain) return rejected(state, "ROLL_ALREADY_COMPLETED");
+/** Common guard for actions only the active turn owner may take outside any pending resolution. */
+function turnOwnerRejection(state: GameState, actorUserId: string): GameplayRejectionReason | null {
+  if (state.phase === "STARTING") return "GAME_NOT_STARTED";
+  if (state.phase === "GAME_OVER") return "GAME_ALREADY_ENDED";
+  if (state.turn === null) return "GAME_NOT_STARTED";
+  if (state.turn.activePlayerId !== actorUserId) return "NOT_YOUR_TURN";
+  if (state.pendingResolution !== null) return "PENDING_RESOLUTION";
+  return null;
+}
 
-  const playerIndex = state.players.findIndex((player) => player.userId === actorUserId);
-  const player = state.players[playerIndex];
+function rollCurrentPlayer(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const guard = turnOwnerRejection(state, env.actorUserId);
+  if (guard !== null) return rejected(state, guard);
+  const turn = state.turn as TurnIdentity;
+  if (turn.hasRolled && !turn.rollAgain) return rejected(state, "ROLL_ALREADY_COMPLETED");
+  const player = state.players.find((candidate) => candidate.userId === env.actorUserId);
   if (player === undefined) return rejected(state, "ACTOR_NOT_IN_GAME");
   if (player.status !== "ACTIVE") return rejected(state, "PLAYER_NOT_ELIGIBLE");
+  if (player.inHolding) return holdingAttempt(state, env, turn, player);
 
-  const roll = rollDice(rng, turn.consecutiveDoubles);
-  const movement = calculateMovement(board, player.position, roll.total);
-  const resolution = dispatchLandedTile(board, movement.to);
-  const nextCash = player.cash + movement.startAward;
-  if (!Number.isSafeInteger(nextCash)) {
-    throw new RangeError("Start award would move player cash outside the safe integer range");
-  }
-
-  let players = state.players.map((candidate, index) =>
-    index === playerIndex
-      ? { ...candidate, position: movement.to, cash: nextCash }
-      : candidate,
-  );
-  let pendingResolution = pendingForLanding(
-    state, turn, actorUserId, roll, resolution, nextGameVersion,
-  );
-  if (
-    resolution.kind === "PROPERTY"
-    || resolution.kind === "TRANSIT"
-    || resolution.kind === "UTILITY"
-  ) {
-    const asset = state.assets.find((candidate) => candidate.tileIndex === resolution.tileIndex);
-    if (asset === undefined) throw new RangeError("landed ownable has no canonical asset");
-    if (asset.ownerUserId === actorUserId || asset.mortgaged) {
-      pendingResolution = null;
-    } else if (asset.ownerUserId !== null) {
-      const charge = applyCharge(
-        players,
-        turn,
-        actorUserId,
-        rentForAsset(state, board, asset, roll.total),
-        asset.ownerUserId,
-        roll,
-        resolution.tileIndex,
-        nextGameVersion,
-      );
-      players = charge.players.slice();
-      pendingResolution = charge.pendingResolution;
-    }
-  } else if (resolution.kind === "TAX") {
-    const charge = applyCharge(
-      players,
-      turn,
-      actorUserId,
-      resolution.amount,
-      null,
-      roll,
-      resolution.tileIndex,
-      nextGameVersion,
-    );
-    players = charge.players.slice();
-    pendingResolution = charge.pendingResolution;
-  }
-  const nextState = acceptedState(state, board, nextGameVersion, {
-    players,
-    turn: {
-      ...turn,
-      hasRolled: true,
-      rollAgain: roll.doubles,
-      consecutiveDoubles: roll.consecutiveDoubles,
-    },
-    pendingResolution,
-  });
-
-  return Object.freeze({
-    kind: "ACCEPTED",
-    state: nextState,
-    event: Object.freeze({
+  const roll = rollDice(env.context.rng, turn.consecutiveDoubles);
+  const rolledTurn: TurnIdentity = {
+    ...turn,
+    hasRolled: true,
+    rollAgain: roll.doubles,
+    consecutiveDoubles: roll.consecutiveDoubles,
+  };
+  if (roll.isThirdConsecutiveDouble) {
+    const held = enterHolding(draftOf(state, rolledTurn), env, env.actorUserId);
+    return accepted(acceptedState(state, env, held), {
       type: "DICE_ROLLED",
-      playerId: actorUserId,
+      playerId: env.actorUserId,
       roll,
-      movement,
-      resolution,
+      movement: null,
+      resolution: null,
+      holding: "ENTERED",
+    });
+  }
+  const moved = moveActor(draftOf(state, rolledTurn), env, env.actorUserId, roll.total);
+  const landing = resolveLanding(state, env, moved.draft, env.actorUserId, roll);
+  return accepted(acceptedState(state, env, landing.draft), {
+    type: "DICE_ROLLED",
+    playerId: env.actorUserId,
+    roll,
+    movement: moved.movement,
+    resolution: landing.resolution,
+    holding: landing.enteredHolding ? "ENTERED" : null,
+  });
+}
+
+/** A Holding turn's roll: doubles release; the third failure forces the fee, then movement. */
+function holdingAttempt(
+  state: GameState,
+  env: RuleEnv,
+  turn: TurnIdentity,
+  player: PlayerState,
+): GameplayCommandResult {
+  const roll = rollDice(env.context.rng, 0);
+  const holdingTurn: TurnIdentity = {
+    ...turn, hasRolled: true, rollAgain: false, consecutiveDoubles: 0, rollFromHolding: true,
+  };
+  let draft = draftOf(state, holdingTurn);
+  const fee = CANDIDATE_RULES.holdingReleaseFee;
+  const event = (
+    holding: HoldingOutcome,
+    movement: MovementResult | null = null,
+    resolution: TileResolution | null = null,
+  ): GameplayEvent => ({ type: "DICE_ROLLED", playerId: player.userId, roll, movement, resolution, holding });
+
+  if (!roll.doubles && player.holdingAttempts < 2) {
+    draft = {
+      ...draft,
+      players: updatePlayer(draft.players, player.userId, (candidate) => ({
+        ...candidate, holdingAttempts: candidate.holdingAttempts + 1,
+      })),
+    };
+    return accepted(acceptedState(state, env, draft), event("ATTEMPT_FAILED"));
+  }
+  if (!roll.doubles && player.cash < fee) {
+    const continuation: ResolutionContinuation = { type: "END_TURN" };
+    draft = {
+      ...draft,
+      pendingResolution: {
+        resolutionId: turn.turnId + ":holding-fee:" + env.nextGameVersion,
+        kind: "DETENTION_FEE",
+        actorUserId: player.userId,
+        decisionOwnerUserId: player.userId,
+        source: { type: "TILE", tileIndex: player.position },
+        continuation,
+        roll,
+        obligation: { debtorUserId: player.userId, creditor: { type: "BANK" }, amount: fee, continuation },
+      },
+    };
+    return accepted(acceptedState(state, env, draft), event("FEE_DUE"));
+  }
+  const cashAfterFee = roll.doubles ? player.cash : player.cash - fee;
+  draft = {
+    ...draft,
+    players: updatePlayer(releaseFromHolding(draft.players, player.userId), player.userId, (candidate) => ({
+      ...candidate, cash: cashAfterFee,
+    })),
+  };
+  const moved = moveActor(draft, env, player.userId, roll.total);
+  const landing = resolveLanding(state, env, moved.draft, player.userId, roll);
+  return accepted(
+    acceptedState(state, env, landing.draft),
+    event(landing.enteredHolding ? "ENTERED" : "RELEASED", moved.movement, landing.resolution),
+  );
+}
+
+function holdingReleaseRejection(state: GameState, actorUserId: string): GameplayRejectionReason | null {
+  const guard = turnOwnerRejection(state, actorUserId);
+  if (guard !== null) return guard;
+  if (state.turn?.hasRolled) return "ROLL_ALREADY_COMPLETED";
+  const player = state.players.find((candidate) => candidate.userId === actorUserId);
+  return player?.inHolding ? null : "NOT_IN_HOLDING";
+}
+
+function payHoldingFee(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const guard = holdingReleaseRejection(state, env.actorUserId);
+  if (guard !== null) return rejected(state, guard);
+  const fee = CANDIDATE_RULES.holdingReleaseFee;
+  const player = state.players.find((candidate) => candidate.userId === env.actorUserId) as PlayerState;
+  if (player.cash < fee) return rejected(state, "INSUFFICIENT_FUNDS");
+  const players = updatePlayer(releaseFromHolding(state.players, player.userId), player.userId, (candidate) => ({
+    ...candidate, cash: candidate.cash - fee,
+  }));
+  return accepted(acceptedState(state, env, { players }), {
+    type: "HOLDING_RELEASED", playerId: player.userId, method: "FEE", cardId: null,
+  });
+}
+
+function useReleaseCard(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["cardId"]);
+  const cardId = payloadIdentifier(payload.cardId, "payload.cardId");
+  const guard = holdingReleaseRejection(state, env.actorUserId);
+  if (guard !== null) return rejected(state, guard);
+  const held = state.ruleState.heldCards.find((card) =>
+    card.cardId === cardId && card.ownerUserId === env.actorUserId && card.capability === "DETENTION_RELEASE"
+  );
+  if (held === undefined || env.catalog === undefined) return rejected(state, "HELD_CARD_NOT_OWNED");
+  return accepted(
+    acceptedState(state, env, {
+      players: releaseFromHolding(state.players, env.actorUserId),
+      ruleState: returnHeldCard(state.ruleState, env.catalog, cardId, env.actorUserId),
     }),
+    { type: "HOLDING_RELEASED", playerId: env.actorUserId, method: "CARD", cardId },
+  );
+}
+
+function drawPendingCard(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["resolutionId"]);
+  const resolutionId = payloadIdentifier(payload.resolutionId, "payload.resolutionId");
+  const pending = pendingDecision(state, env.actorUserId, resolutionId);
+  if (pending?.kind !== "CARD" || pending.source.type !== "TILE" || pending.roll === null) {
+    return rejected(state, "RESOLUTION_NOT_PENDING");
+  }
+  const tile = env.board.economyProfile.tiles[pending.source.tileIndex];
+  if (tile?.type !== "card") return rejected(state, "RESOLUTION_NOT_PENDING");
+  if (env.catalog === undefined) return rejected(state, "CARD_CATALOG_UNAVAILABLE");
+  const turn = state.turn as TurnIdentity;
+  const ruleState = state.ruleState.decks.length === 0
+    ? initializeDecks(state.ruleState, env.catalog, env.context.rng)
+    : state.ruleState;
+  const applied = runEffects(
+    state,
+    env,
+    env.catalog,
+    { ...draftOf(state, turn), ruleState, pendingResolution: null },
+    [{ type: "DRAW_CARD", deckId: tile.deck }],
+    MAX_RESOLUTION_STEPS,
+    pending.source.tileIndex,
+    pending.roll,
+  );
+  if (applied.kind === "FAILED") {
+    return rejected(state, "EFFECT_CHAIN_FAILED", { diagnostic: applied.diagnostic });
+  }
+  return accepted(acceptedState(state, env, applied.draft), {
+    type: "CARD_RESOLVED",
+    playerId: env.actorUserId,
+    drawnCardIds: applied.drawnCardIds,
+    outcome: applied.outcome,
   });
 }
 
@@ -535,16 +950,10 @@ function pendingDecision(
   return pending;
 }
 
-function buyProperty(
-  state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  actorUserId: string,
-  nextGameVersion: number,
-): GameplayCommandResult {
-  const payload = payloadObject(command, ["resolutionId"]);
+function buyProperty(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["resolutionId"]);
   const resolutionId = payloadIdentifier(payload.resolutionId, "payload.resolutionId");
-  const pending = pendingDecision(state, actorUserId, resolutionId);
+  const pending = pendingDecision(state, env.actorUserId, resolutionId);
   if (pending?.kind !== "BUY_DECISION" || pending.source.type !== "TILE") {
     return rejected(state, "RESOLUTION_NOT_PENDING");
   }
@@ -553,40 +962,29 @@ function buyProperty(
   const asset = state.assets[assetIndex];
   if (asset === undefined) return rejected(state, "RESOLUTION_NOT_PENDING");
   if (asset.ownerUserId !== null) return rejected(state, "ASSET_ALREADY_OWNED");
-  const playerIndex = state.players.findIndex((player) => player.userId === actorUserId);
+  const playerIndex = state.players.findIndex((player) => player.userId === env.actorUserId);
   const player = state.players[playerIndex];
   if (player === undefined) return rejected(state, "ACTOR_NOT_IN_GAME");
-  const price = purchasePrice(board, asset);
+  const price = purchasePrice(env.board, asset);
   if (player.cash < price) return rejected(state, "INSUFFICIENT_FUNDS");
-  const players = state.players.map((candidate, index) => index === playerIndex
-    ? { ...candidate, cash: candidate.cash - price }
-    : candidate);
-  const assets = state.assets.map((candidate, index) => index === assetIndex
-    ? { ...candidate, ownerUserId: actorUserId }
-    : candidate);
-  const nextState = acceptedState(state, board, nextGameVersion, {
-    players,
-    assets,
+  const nextState = acceptedState(state, env, {
+    players: state.players.map((candidate, index) => index === playerIndex
+      ? { ...candidate, cash: candidate.cash - price }
+      : candidate),
+    assets: state.assets.map((candidate, index) => index === assetIndex
+      ? { ...candidate, ownerUserId: env.actorUserId }
+      : candidate),
     pendingResolution: null,
   });
-  return Object.freeze({
-    kind: "ACCEPTED",
-    state: nextState,
-    event: Object.freeze({ type: "PROPERTY_BOUGHT", playerId: actorUserId, assetId: asset.assetId, price }),
+  return accepted(nextState, {
+    type: "PROPERTY_BOUGHT", playerId: env.actorUserId, assetId: asset.assetId, price,
   });
 }
 
-function declineProperty(
-  state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  actorUserId: string,
-  nextGameVersion: number,
-  auctionDecisionDeadlineAt: number | undefined,
-): GameplayCommandResult {
-  const payload = payloadObject(command, ["resolutionId"]);
+function declineProperty(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["resolutionId"]);
   const resolutionId = payloadIdentifier(payload.resolutionId, "payload.resolutionId");
-  const pending = pendingDecision(state, actorUserId, resolutionId);
+  const pending = pendingDecision(state, env.actorUserId, resolutionId);
   if (pending?.kind !== "BUY_DECISION" || pending.source.type !== "TILE") {
     return rejected(state, "RESOLUTION_NOT_PENDING");
   }
@@ -596,23 +994,23 @@ function declineProperty(
     return rejected(state, asset === undefined ? "RESOLUTION_NOT_PENDING" : "ASSET_ALREADY_OWNED");
   }
   const deadline = authoritativeInteger(
-    auctionDecisionDeadlineAt, "context.auctionDecisionDeadlineAt",
+    env.context.auctionDecisionDeadlineAt, "context.auctionDecisionDeadlineAt",
   );
   const eligiblePlayers = state.players.filter((player) => player.status === "ACTIVE");
-  const decliningIndex = eligiblePlayers.findIndex((player) => player.userId === actorUserId);
+  const decliningIndex = eligiblePlayers.findIndex((player) => player.userId === env.actorUserId);
   const participantOrder = Array.from(
     { length: eligiblePlayers.length },
     (_, offset) => eligiblePlayers[(decliningIndex + offset + 1) % eligiblePlayers.length]!.userId,
   );
   const currentActorUserId = participantOrder[0]!;
   const fact = auctionFact(
-    "STARTED", pending.resolutionId, asset.assetId, actorUserId, null,
-    nextGameVersion, command.actionId,
+    "STARTED", pending.resolutionId, asset.assetId, env.actorUserId, null,
+    env.nextGameVersion, env.command.actionId,
   );
   const auction: AuctionState = {
     auctionId: pending.resolutionId,
     assetId: asset.assetId,
-    originatingPlayerId: actorUserId,
+    originatingPlayerId: env.actorUserId,
     continuation: pending.continuation,
     participantOrder,
     passedPlayerIds: [],
@@ -623,7 +1021,7 @@ function declineProperty(
     decisionDeadlineAt: deadline,
     history: [fact],
   };
-  const nextState = acceptedState(state, board, nextGameVersion, {
+  const nextState = acceptedState(state, env, {
     pendingResolution: {
       ...pending,
       kind: "AUCTION",
@@ -631,24 +1029,13 @@ function declineProperty(
     },
     auction,
   });
-  return Object.freeze({
-    kind: "ACCEPTED",
-    state: nextState,
-    event: Object.freeze({
-      type: "PROPERTY_DECLINED",
-      playerId: actorUserId,
-      assetId: asset.assetId,
-      auction: nextState.auction!,
-      facts: nextState.auction!.history,
-    }),
+  return accepted(nextState, {
+    type: "PROPERTY_DECLINED",
+    playerId: env.actorUserId,
+    assetId: asset.assetId,
+    auction: nextState.auction!,
+    facts: nextState.auction!.history,
   });
-}
-
-function authoritativeInteger(value: unknown, field: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
-    throw new CommandValidationError(field, "expected a non-negative safe integer");
-  }
-  return value as number;
 }
 
 function auctionFact(
@@ -694,13 +1081,10 @@ function nextAuctionActor(
 
 function auctionTransition(
   state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  nextGameVersion: number,
+  env: RuleEnv,
   pending: PendingResolution,
   changedAuction: AuctionState,
   action: "BID" | "PASS" | "AUTO_PASS",
-  nextDecisionDeadlineAt: number | undefined,
 ): GameplayCommandResult {
   const remaining = changedAuction.participantOrder.filter(
     (playerId) => !changedAuction.passedPlayerIds.includes(playerId),
@@ -710,6 +1094,14 @@ function auctionTransition(
   );
   const asset = state.assets[assetIndex];
   if (asset === undefined || asset.ownerUserId !== null) return rejected(state, "AUCTION_NOT_ACTIVE");
+  const updated = (nextState: GameState, facts: readonly AuctionFact[]) => accepted(nextState, {
+    type: "AUCTION_UPDATED",
+    action,
+    auctionId: changedAuction.auctionId,
+    assetId: changedAuction.assetId,
+    auction: nextState.auction,
+    facts: Object.freeze(facts),
+  });
 
   if (changedAuction.hasBid && remaining.length === 1) {
     const winnerUserId = changedAuction.highBidderUserId;
@@ -724,10 +1116,9 @@ function auctionTransition(
     }
     const finalFact = auctionFact(
       "WINNER", changedAuction.auctionId, changedAuction.assetId, winnerUserId,
-      finalPrice, nextGameVersion, command.actionId,
+      finalPrice, env.nextGameVersion, env.command.actionId,
     );
-    const facts = [changedAuction.history.at(-1)!, finalFact];
-    const nextState = acceptedState(state, board, nextGameVersion, {
+    const nextState = acceptedState(state, env, {
       players: state.players.map((player, index) => index === winnerIndex
         ? { ...player, cash: player.cash - finalPrice }
         : player),
@@ -737,42 +1128,16 @@ function auctionTransition(
       pendingResolution: null,
       auction: null,
     });
-    return Object.freeze({
-      kind: "ACCEPTED",
-      state: nextState,
-      event: Object.freeze({
-        type: "AUCTION_UPDATED",
-        action,
-        auctionId: changedAuction.auctionId,
-        assetId: changedAuction.assetId,
-        auction: null,
-        facts: Object.freeze(facts),
-      }),
-    });
+    return updated(nextState, [changedAuction.history.at(-1)!, finalFact]);
   }
 
   if (!changedAuction.hasBid && remaining.length === 0) {
     const finalFact = auctionFact(
       "NO_BID", changedAuction.auctionId, changedAuction.assetId, null, null,
-      nextGameVersion, command.actionId,
+      env.nextGameVersion, env.command.actionId,
     );
-    const facts = [changedAuction.history.at(-1)!, finalFact];
-    const nextState = acceptedState(state, board, nextGameVersion, {
-      pendingResolution: null,
-      auction: null,
-    });
-    return Object.freeze({
-      kind: "ACCEPTED",
-      state: nextState,
-      event: Object.freeze({
-        type: "AUCTION_UPDATED",
-        action,
-        auctionId: changedAuction.auctionId,
-        assetId: changedAuction.assetId,
-        auction: null,
-        facts: Object.freeze(facts),
-      }),
-    });
+    const nextState = acceptedState(state, env, { pendingResolution: null, auction: null });
+    return updated(nextState, [changedAuction.history.at(-1)!, finalFact]);
   }
 
   const currentActorUserId = nextAuctionActor(
@@ -780,40 +1145,21 @@ function auctionTransition(
     changedAuction.passedPlayerIds,
     changedAuction.highBidderUserId,
   );
-  const nextAuction: AuctionState = {
-    ...changedAuction,
-    currentActorUserId,
-    decisionDeadlineAt: authoritativeInteger(
-      nextDecisionDeadlineAt, "context.auctionDecisionDeadlineAt",
-    ),
-  };
-  const nextState = acceptedState(state, board, nextGameVersion, {
+  const nextState = acceptedState(state, env, {
     pendingResolution: { ...pending, decisionOwnerUserId: currentActorUserId },
-    auction: nextAuction,
+    auction: {
+      ...changedAuction,
+      currentActorUserId,
+      decisionDeadlineAt: authoritativeInteger(
+        env.context.auctionDecisionDeadlineAt, "context.auctionDecisionDeadlineAt",
+      ),
+    },
   });
-  return Object.freeze({
-    kind: "ACCEPTED",
-    state: nextState,
-    event: Object.freeze({
-      type: "AUCTION_UPDATED",
-      action,
-      auctionId: changedAuction.auctionId,
-      assetId: changedAuction.assetId,
-      auction: nextState.auction,
-      facts: Object.freeze([nextState.auction!.history.at(-1)!]),
-    }),
-  });
+  return updated(nextState, [nextState.auction!.history.at(-1)!]);
 }
 
-function placeBid(
-  state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  actorUserId: string,
-  nextGameVersion: number,
-  nextDecisionDeadlineAt: number | undefined,
-): GameplayCommandResult {
-  const payload = payloadObject(command, ["auctionId", "amount"]);
+function placeBid(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["auctionId", "amount"]);
   const auctionId = payloadIdentifier(payload.auctionId, "payload.auctionId");
   if (!Number.isSafeInteger(payload.amount)) {
     throw new CommandValidationError("payload.amount", "expected a safe integer");
@@ -822,48 +1168,31 @@ function placeBid(
   const active = currentAuction(state, auctionId);
   if (active === null) return rejected(state, "AUCTION_NOT_ACTIVE");
   const { auction, pending } = active;
-  if (auction.currentActorUserId !== actorUserId) return rejected(state, "NOT_AUCTION_ACTOR");
+  if (auction.currentActorUserId !== env.actorUserId) return rejected(state, "NOT_AUCTION_ACTOR");
   const minimum = auction.highBid === null ? 2 : auction.highBid + 2;
   if (!Number.isSafeInteger(minimum)) throw new RangeError("auction minimum exceeds safe integer range");
   if (amount < minimum) return rejected(state, "BID_TOO_LOW");
-  const bidder = state.players.find((player) => player.userId === actorUserId);
+  const bidder = state.players.find((player) => player.userId === env.actorUserId);
   if (bidder === undefined || bidder.status !== "ACTIVE") return rejected(state, "PLAYER_NOT_ELIGIBLE");
   if (amount > bidder.cash) return rejected(state, "BID_EXCEEDS_CASH");
   const fact = auctionFact(
-    "BID", auction.auctionId, auction.assetId, actorUserId, amount,
-    nextGameVersion, command.actionId,
+    "BID", auction.auctionId, auction.assetId, env.actorUserId, amount,
+    env.nextGameVersion, env.command.actionId,
   );
-  return auctionTransition(
-    state,
-    board,
-    command,
-    nextGameVersion,
-    pending,
-    {
-      ...auction,
-      hasBid: true,
-      highBid: amount,
-      highBidderUserId: actorUserId,
-      history: [...auction.history, fact],
-    },
-    "BID",
-    nextDecisionDeadlineAt,
-  );
+  return auctionTransition(state, env, pending, {
+    ...auction,
+    hasBid: true,
+    highBid: amount,
+    highBidderUserId: env.actorUserId,
+    history: [...auction.history, fact],
+  }, "BID");
 }
 
-function passAuction(
-  state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  actorUserId: string,
-  nextGameVersion: number,
-  nextDecisionDeadlineAt: number | undefined,
-  autoPass: boolean,
-): GameplayCommandResult {
+function passAuction(state: GameState, env: RuleEnv, autoPass: boolean): GameplayCommandResult {
   const keys = autoPass
     ? ["auctionId", "actorUserId", "decisionDeadlineAt"]
     : ["auctionId"];
-  const payload = payloadObject(command, keys);
+  const payload = payloadObject(env.command, keys);
   const auctionId = payloadIdentifier(payload.auctionId, "payload.auctionId");
   const active = currentAuction(state, auctionId);
   if (active === null) return rejected(state, "AUCTION_NOT_ACTIVE");
@@ -881,7 +1210,7 @@ function passAuction(
     ) {
       return rejected(state, "STALE_AUCTION_TIMEOUT");
     }
-  } else if (auction.currentActorUserId !== actorUserId) {
+  } else if (auction.currentActorUserId !== env.actorUserId) {
     return rejected(state, "NOT_AUCTION_ACTOR");
   }
   const passingPlayerId = auction.currentActorUserId;
@@ -891,35 +1220,19 @@ function passAuction(
     auction.assetId,
     passingPlayerId,
     null,
-    nextGameVersion,
-    command.actionId,
+    env.nextGameVersion,
+    env.command.actionId,
   );
-  return auctionTransition(
-    state,
-    board,
-    command,
-    nextGameVersion,
-    pending,
-    {
-      ...auction,
-      passedPlayerIds: [...auction.passedPlayerIds, passingPlayerId],
-      history: [...auction.history, fact],
-    },
-    autoPass ? "AUTO_PASS" : "PASS",
-    nextDecisionDeadlineAt,
-  );
+  return auctionTransition(state, env, pending, {
+    ...auction,
+    passedPlayerIds: [...auction.passedPlayerIds, passingPlayerId],
+    history: [...auction.history, fact],
+  }, autoPass ? "AUTO_PASS" : "PASS");
 }
 
-function timeoutAuction(
-  state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  nextGameVersion: number,
-  currentTime: number | undefined,
-  nextDecisionDeadlineAt: number | undefined,
-): GameplayCommandResult {
-  const now = authoritativeInteger(currentTime, "context.currentTime");
-  const payload = payloadObject(command, ["auctionId", "actorUserId", "decisionDeadlineAt"]);
+function timeoutAuction(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const now = authoritativeInteger(env.context.currentTime, "context.currentTime");
+  const payload = payloadObject(env.command, ["auctionId", "actorUserId", "decisionDeadlineAt"]);
   const auctionId = payloadIdentifier(payload.auctionId, "payload.auctionId");
   const active = currentAuction(state, auctionId);
   if (active === null) return rejected(state, "AUCTION_NOT_ACTIVE");
@@ -936,64 +1249,78 @@ function timeoutAuction(
   if (now < active.auction.decisionDeadlineAt) {
     return rejected(state, "AUCTION_DEADLINE_NOT_EXPIRED");
   }
-  return passAuction(
-    state,
-    board,
-    command,
-    active.auction.currentActorUserId,
-    nextGameVersion,
-    nextDecisionDeadlineAt,
-    true,
-  );
+  return passAuction(state, env, true);
 }
 
+/**
+ * Owned-asset management by the turn owner. Liquidation actions are also legal while the
+ * actor's own obligation is outstanding; everything else waits for the pending resolution.
+ */
 function ownedAssetAction(
   state: GameState,
-  command: GameCommand,
-  actorUserId: string,
+  env: RuleEnv,
+  liquidation: boolean,
 ): Readonly<{ asset: AssetState; assetIndex: number }> | GameplayCommandResult {
-  const payload = payloadObject(command, ["assetId"]);
+  const payload = payloadObject(env.command, ["assetId"]);
   const assetId = payloadIdentifier(payload.assetId, "payload.assetId");
   const turn = state.turn;
-  if (turn === null || turn.activePlayerId !== actorUserId) return rejected(state, "NOT_YOUR_TURN");
-  if (state.pendingResolution !== null) return rejected(state, "PENDING_RESOLUTION");
+  if (turn === null || turn.activePlayerId !== env.actorUserId) return rejected(state, "NOT_YOUR_TURN");
+  const pending = state.pendingResolution;
+  if (pending !== null) {
+    const ownDebt = pending.obligation?.debtorUserId === env.actorUserId;
+    if (!liquidation || !ownDebt) return rejected(state, "PENDING_RESOLUTION");
+    if (state.ruleState.debt?.bankruptcyRequired) return rejected(state, "DEBT_HANDOFF_PENDING");
+  }
   const assetIndex = state.assets.findIndex((candidate) => candidate.assetId === assetId);
   const asset = state.assets[assetIndex];
-  if (asset === undefined || asset.ownerUserId !== actorUserId) return rejected(state, "ASSET_NOT_OWNED");
+  if (asset === undefined || asset.ownerUserId !== env.actorUserId) return rejected(state, "ASSET_NOT_OWNED");
   return { asset, assetIndex };
 }
 
-function build(
+/** Applies a liquidation-capable change, then settles the actor's obligation if now covered. */
+function liquidationResult(
   state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  actorUserId: string,
-  nextGameVersion: number,
+  env: RuleEnv,
+  players: readonly PlayerState[],
+  assets: readonly AssetState[],
+  event: (debtSettled: boolean) => GameplayEvent,
 ): GameplayCommandResult {
-  const selected = ownedAssetAction(state, command, actorUserId);
+  const settlement = settleObligation(state, env, {
+    ...draftOf(state, state.turn as TurnIdentity),
+    players,
+    assets,
+  });
+  if (settlement.kind === "FAILED") {
+    return rejected(state, "EFFECT_CHAIN_FAILED", { diagnostic: settlement.diagnostic });
+  }
+  return accepted(acceptedState(state, env, settlement.draft), event(settlement.settled));
+}
+
+function build(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const selected = ownedAssetAction(state, env, false);
   if ("kind" in selected) return selected;
   const { asset, assetIndex } = selected;
   if (asset.kind !== "PROPERTY") return rejected(state, "ASSET_NOT_DEVELOPABLE");
   const turn = state.turn;
   if (turn === null) return rejected(state, "NOT_YOUR_TURN");
-  const playerIndex = state.players.findIndex((player) => player.userId === actorUserId);
+  const playerIndex = state.players.findIndex((player) => player.userId === env.actorUserId);
   const player = state.players[playerIndex];
   if (player === undefined) return rejected(state, "ACTOR_NOT_IN_GAME");
   if (player.inHolding) return rejected(state, "PLAYER_IN_HOLDING");
   if (turn.developmentActionsUsed >= 2) return rejected(state, "DEVELOPMENT_LIMIT_REACHED");
-  const setAssets = propertySetAssets(state, board, asset);
-  if (!setAssets.every((candidate) => candidate.ownerUserId === actorUserId)) {
+  const setAssets = propertySetAssets(state, env.board, asset);
+  if (!setAssets.every((candidate) => candidate.ownerUserId === env.actorUserId)) {
     return rejected(state, "INCOMPLETE_SET");
   }
   if (setAssets.some((candidate) => candidate.mortgaged)) return rejected(state, "SET_MORTGAGED");
   if (asset.developmentLevel >= 4) return rejected(state, "ASSET_NOT_DEVELOPABLE");
   const minimumLevel = Math.min(...setAssets.map((candidate) => candidate.developmentLevel));
   if (asset.developmentLevel !== minimumLevel) return rejected(state, "UNEVEN_BUILD");
-  const property = propertyForAsset(board, asset);
+  const property = propertyForAsset(env.board, asset);
   if (property === null) return rejected(state, "ASSET_NOT_DEVELOPABLE");
   if (player.cash < property.buildingCost) return rejected(state, "INSUFFICIENT_FUNDS");
   const nextLevel = asset.developmentLevel + 1;
-  const nextState = acceptedState(state, board, nextGameVersion, {
+  const nextState = acceptedState(state, env, {
     players: state.players.map((candidate, index) => index === playerIndex
       ? { ...candidate, cash: candidate.cash - property.buildingCost }
       : candidate),
@@ -1002,114 +1329,303 @@ function build(
       : candidate),
     turn: { ...turn, developmentActionsUsed: turn.developmentActionsUsed + 1 },
   });
-  return Object.freeze({
-    kind: "ACCEPTED",
-    state: nextState,
-    event: Object.freeze({
-      type: "DEVELOPMENT_BOUGHT",
-      playerId: actorUserId,
-      assetId: asset.assetId,
-      level: nextLevel,
-      price: property.buildingCost,
-    }),
+  return accepted(nextState, {
+    type: "DEVELOPMENT_BOUGHT",
+    playerId: env.actorUserId,
+    assetId: asset.assetId,
+    level: nextLevel,
+    price: property.buildingCost,
   });
 }
 
-function changeMortgage(
-  state: GameState,
-  board: BoardDefinition,
-  command: GameCommand,
-  actorUserId: string,
-  nextGameVersion: number,
-  mortgage: boolean,
-): GameplayCommandResult {
-  const selected = ownedAssetAction(state, command, actorUserId);
+/** Sells one level back at the canonical 50%, highest level in the set first (even-sell). */
+function sellDevelopment(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const selected = ownedAssetAction(state, env, true);
+  if ("kind" in selected) return selected;
+  const { asset, assetIndex } = selected;
+  if (asset.kind !== "PROPERTY" || asset.developmentLevel === 0) {
+    return rejected(state, "ASSET_NOT_DEVELOPABLE");
+  }
+  const setAssets = propertySetAssets(state, env.board, asset);
+  if (asset.developmentLevel !== Math.max(...setAssets.map((candidate) => candidate.developmentLevel))) {
+    return rejected(state, "UNEVEN_SALE");
+  }
+  const property = propertyForAsset(env.board, asset);
+  if (property === null) return rejected(state, "ASSET_NOT_DEVELOPABLE");
+  const amount = property.buildingSellBack;
+  const level = asset.developmentLevel - 1;
+  return liquidationResult(
+    state,
+    env,
+    updatePlayer(state.players, env.actorUserId, (player) => ({
+      ...player, cash: checkedCash(player.cash + amount),
+    })),
+    state.assets.map((candidate, index) => index === assetIndex
+      ? { ...asset, developmentLevel: level }
+      : candidate),
+    (debtSettled) => ({
+      type: "DEVELOPMENT_SOLD", playerId: env.actorUserId, assetId: asset.assetId, level, amount, debtSettled,
+    }),
+  );
+}
+
+function changeMortgage(state: GameState, env: RuleEnv, mortgage: boolean): GameplayCommandResult {
+  const selected = ownedAssetAction(state, env, mortgage);
   if ("kind" in selected) return selected;
   const { asset, assetIndex } = selected;
   if (mortgage && asset.mortgaged) return rejected(state, "ALREADY_MORTGAGED");
   if (!mortgage && !asset.mortgaged) return rejected(state, "NOT_MORTGAGED");
   if (mortgage && asset.kind === "PROPERTY") {
-    const setAssets = propertySetAssets(state, board, asset);
+    const setAssets = propertySetAssets(state, env.board, asset);
     if (setAssets.some((candidate) => candidate.developmentLevel > 0)) {
       return rejected(state, "SET_HAS_DEVELOPMENT");
     }
   }
-  const playerIndex = state.players.findIndex((player) => player.userId === actorUserId);
-  const player = state.players[playerIndex];
+  const player = state.players.find((candidate) => candidate.userId === env.actorUserId);
   if (player === undefined) return rejected(state, "ACTOR_NOT_IN_GAME");
-  const amount = mortgage ? mortgageValue(board, asset) : unmortgageCost(board, asset);
+  const amount = mortgage ? mortgageValue(env.board, asset) : unmortgageCost(env.board, asset);
   if (!mortgage && player.cash < amount) return rejected(state, "INSUFFICIENT_FUNDS");
-  const nextCash = mortgage ? player.cash + amount : player.cash - amount;
-  if (!Number.isSafeInteger(nextCash)) throw new RangeError("mortgage cash exceeds safe integer range");
-  const nextState = acceptedState(state, board, nextGameVersion, {
-    players: state.players.map((candidate, index) => index === playerIndex
-      ? { ...candidate, cash: nextCash }
-      : candidate),
-    assets: state.assets.map((candidate, index) => index === assetIndex
+  const nextCash = checkedCash(mortgage ? player.cash + amount : player.cash - amount);
+  return liquidationResult(
+    state,
+    env,
+    updatePlayer(state.players, env.actorUserId, (candidate) => ({ ...candidate, cash: nextCash })),
+    state.assets.map((candidate, index) => index === assetIndex
       ? { ...candidate, mortgaged: mortgage }
       : candidate),
-  });
-  return Object.freeze({
-    kind: "ACCEPTED",
-    state: nextState,
-    event: Object.freeze({
+    (debtSettled) => ({
       type: mortgage ? "ASSET_MORTGAGED" : "ASSET_UNMORTGAGED",
-      playerId: actorUserId,
+      playerId: env.actorUserId,
       assetId: asset.assetId,
       amount,
+      debtSettled,
     }),
+  );
+}
+
+function tradeFact(
+  type: TradeFact["type"],
+  trade: TradeState,
+  env: RuleEnv,
+): TradeFact {
+  return freezeTrade({
+    type,
+    tradeId: trade.tradeId,
+    parentTradeId: trade.parentTradeId,
+    actorUserId: env.actorUserId,
+    proposerUserId: trade.proposerUserId,
+    recipientUserId: trade.recipientUserId,
+    offered: trade.offered,
+    requested: trade.requested,
+    liquidationFor: trade.liquidationFor,
+    gameVersion: env.nextGameVersion,
+    actionId: env.command.actionId,
   });
 }
 
-function endCurrentTurn(
+/**
+ * Current-state legality for creating or settling a trade. Acceptance always calls this again,
+ * so nothing validated at proposal time is trusted later.
+ */
+function tradeRejection(state: GameState, env: RuleEnv, trade: TradeState): GameplayRejectionReason | null {
+  if (state.phase === "STARTING") return "GAME_NOT_STARTED";
+  if (state.phase === "GAME_OVER") return "GAME_ALREADY_ENDED";
+  if (state.auction !== null) return "TRADE_BLOCKED_DURING_AUCTION";
+  const parties = [trade.proposerUserId, trade.recipientUserId];
+  if (parties.some((userId) => state.players.find((player) => player.userId === userId)?.status !== "ACTIVE")) {
+    return "PLAYER_NOT_ELIGIBLE";
+  }
+  const pending = state.pendingResolution;
+  const debtorUserId = pending?.obligation?.debtorUserId ?? null;
+  if (debtorUserId !== null && parties.includes(debtorUserId)) {
+    if (state.ruleState.debt?.bankruptcyRequired) return "DEBT_HANDOFF_PENDING";
+    // Only an explicit liquidation trade created under this debt may involve the debtor.
+    if (trade.liquidationFor !== pending?.resolutionId) return "DEBT_BLOCKED";
+  }
+  // RULE-018 owns team-specific trade legality; FFA and TEAMS currently share these rules.
+  const sides: readonly [string, TradeBundle][] = [
+    [trade.proposerUserId, trade.offered],
+    [trade.recipientUserId, trade.requested],
+  ];
+  for (const [giverUserId, bundle] of sides) {
+    const giver = state.players.find((player) => player.userId === giverUserId) as PlayerState;
+    if (giver.cash < bundle.cash) return "INSUFFICIENT_FUNDS";
+    for (const assetId of bundle.assetIds) {
+      const asset = state.assets.find((candidate) => candidate.assetId === assetId);
+      if (asset?.ownerUserId !== giverUserId) return "ASSET_NOT_OWNED";
+      if (pending?.source.type === "TILE" && pending.source.tileIndex === asset.tileIndex) {
+        return "ASSET_IN_PENDING_RESOLUTION";
+      }
+      if (asset.kind === "PROPERTY"
+        && propertySetAssets(state, env.board, asset).some((candidate) => candidate.developmentLevel > 0)) {
+        return "SET_HAS_DEVELOPMENT";
+      }
+    }
+  }
+  return null;
+}
+
+function withTrades(
   state: GameState,
-  board: BoardDefinition,
-  actorUserId: string,
-  nextGameVersion: number,
-): GameplayCommandResult {
-  if (state.phase === "STARTING") return rejected(state, "GAME_NOT_STARTED");
-  if (state.phase === "GAME_OVER") return rejected(state, "GAME_ALREADY_ENDED");
-  const turn = state.turn;
-  if (turn === null) return rejected(state, "GAME_NOT_STARTED");
-  if (turn.activePlayerId !== actorUserId) return rejected(state, "NOT_YOUR_TURN");
-  if (state.pendingResolution !== null) return rejected(state, "PENDING_RESOLUTION");
-  if (!turn.hasRolled) return rejected(state, "ROLL_REQUIRED");
-  if (turn.rollAgain) return rejected(state, "ROLL_REQUIRED");
+  trades: readonly TradeState[],
+  fact: TradeFact,
+): AdvancedRuleState {
+  return { ...state.ruleState, trades, tradeFacts: [...state.ruleState.tradeFacts, fact] };
+}
+
+function openTrade(state: GameState, env: RuleEnv, parent: TradeState | null): GameplayCommandResult {
+  const payload = payloadObject(
+    env.command,
+    parent === null ? ["recipientUserId", "offered", "requested"] : ["tradeId", "offered", "requested"],
+  );
+  const offered = payloadBundle(payload.offered, "payload.offered");
+  const requested = payloadBundle(payload.requested, "payload.requested");
+  const recipientUserId = parent === null
+    ? payloadIdentifier(payload.recipientUserId, "payload.recipientUserId")
+    : parent.proposerUserId;
+  if (recipientUserId === env.actorUserId
+    || !state.players.some((player) => player.userId === recipientUserId)) {
+    return rejected(state, "INVALID_TRADE_PARTNER");
+  }
+  const assetIds = [...offered.assetIds, ...requested.assetIds];
+  if (new Set(assetIds).size !== assetIds.length) {
+    throw new CommandValidationError("payload", "an asset cannot appear on both sides");
+  }
+  if (offered.cash === 0 && requested.cash === 0 && assetIds.length === 0) {
+    return rejected(state, "EMPTY_TRADE");
+  }
+  const pending = state.pendingResolution;
+  const debtorUserId = pending?.obligation?.debtorUserId ?? null;
+  const trade: TradeState = freezeTrade({
+    tradeId: "trade-" + env.nextGameVersion,
+    parentTradeId: parent?.tradeId ?? null,
+    proposerUserId: env.actorUserId,
+    recipientUserId,
+    offered,
+    requested,
+    createdGameVersion: env.nextGameVersion,
+    liquidationFor: debtorUserId !== null && [env.actorUserId, recipientUserId].includes(debtorUserId)
+      ? pending?.resolutionId ?? null
+      : null,
+  });
+  const reason = tradeRejection(state, env, trade);
+  if (reason !== null) return rejected(state, reason);
+  const remaining = state.ruleState.trades.filter((candidate) => candidate.tradeId !== parent?.tradeId);
+  const fact = tradeFact(parent === null ? "PROPOSED" : "COUNTERED", trade, env);
+  return accepted(
+    acceptedState(state, env, { ruleState: withTrades(state, [...remaining, trade], fact) }),
+    { type: "TRADE_UPDATED", fact, debtSettled: false },
+  );
+}
+
+function openTradeFor(state: GameState, env: RuleEnv): TradeState | null {
+  const payload = payloadObject(env.command, env.command.type === "COUNTER_TRADE"
+    ? ["tradeId", "offered", "requested"]
+    : ["tradeId"]);
+  const tradeId = payloadIdentifier(payload.tradeId, "payload.tradeId");
+  return state.ruleState.trades.find((trade) => trade.tradeId === tradeId) ?? null;
+}
+
+function counterTrade(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const original = openTradeFor(state, env);
+  if (original === null) return rejected(state, "TRADE_NOT_OPEN");
+  if (original.recipientUserId !== env.actorUserId) return rejected(state, "NOT_TRADE_PARTICIPANT");
+  return openTrade(state, env, original);
+}
+
+function closeTrade(state: GameState, env: RuleEnv, disposition: "REJECTED" | "CANCELLED"): GameplayCommandResult {
+  if (state.phase !== "ACTIVE_TURN") {
+    return rejected(state, state.phase === "GAME_OVER" ? "GAME_ALREADY_ENDED" : "GAME_NOT_STARTED");
+  }
+  const trade = openTradeFor(state, env);
+  if (trade === null) return rejected(state, "TRADE_NOT_OPEN");
+  const allowedUserId = disposition === "REJECTED" ? trade.recipientUserId : trade.proposerUserId;
+  if (env.actorUserId !== allowedUserId) return rejected(state, "NOT_TRADE_PARTICIPANT");
+  const fact = tradeFact(disposition, trade, env);
+  return accepted(
+    acceptedState(state, env, {
+      ruleState: withTrades(state, state.ruleState.trades.filter((candidate) => candidate !== trade), fact),
+    }),
+    { type: "TRADE_UPDATED", fact, debtSettled: false },
+  );
+}
+
+/** Atomic settlement after revalidating the proposal against the current canonical state. */
+function acceptTrade(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const trade = openTradeFor(state, env);
+  if (trade === null) return rejected(state, "TRADE_NOT_OPEN");
+  if (trade.recipientUserId !== env.actorUserId) return rejected(state, "NOT_TRADE_PARTICIPANT");
+  const reason = tradeRejection(state, env, trade);
+  if (reason !== null) return rejected(state, reason);
+  const net = trade.requested.cash - trade.offered.cash;
+  const players = state.players.map((player) => {
+    if (player.userId === trade.proposerUserId) return { ...player, cash: checkedCash(player.cash + net) };
+    if (player.userId === trade.recipientUserId) return { ...player, cash: checkedCash(player.cash - net) };
+    return player;
+  });
+  const assets = state.assets.map((asset) => {
+    if (trade.offered.assetIds.includes(asset.assetId)) return { ...asset, ownerUserId: trade.recipientUserId };
+    if (trade.requested.assetIds.includes(asset.assetId)) return { ...asset, ownerUserId: trade.proposerUserId };
+    return asset;
+  });
+  const fact = tradeFact("ACCEPTED", trade, env);
+  const settlement = settleObligation(state, env, {
+    ...draftOf(state, state.turn as TurnIdentity),
+    players,
+    assets,
+    ruleState: withTrades(state, state.ruleState.trades.filter((candidate) => candidate !== trade), fact),
+  });
+  if (settlement.kind === "FAILED") {
+    return rejected(state, "EFFECT_CHAIN_FAILED", { diagnostic: settlement.diagnostic });
+  }
+  return accepted(acceptedState(state, env, settlement.draft), {
+    type: "TRADE_UPDATED", fact, debtSettled: settlement.settled,
+  });
+}
+
+/** Deadline expiry produces the bankruptcy handoff only; RULE-016/017 perform the transfer. */
+function timeoutDebt(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const now = authoritativeInteger(env.context.currentTime, "context.currentTime");
+  const payload = payloadObject(env.command, ["resolutionId", "deadlineAt"]);
+  const resolutionId = payloadIdentifier(payload.resolutionId, "payload.resolutionId");
+  const deadlineAt = authoritativeInteger(payload.deadlineAt, "payload.deadlineAt");
+  const debt = state.ruleState.debt;
+  const obligation = state.pendingResolution?.obligation ?? null;
+  if (debt === null || obligation === null || debt.bankruptcyRequired || debt.resolutionId !== resolutionId) {
+    return rejected(state, "DEBT_NOT_ACTIVE");
+  }
+  if (debt.deadlineAt !== deadlineAt) return rejected(state, "STALE_DEBT_TIMEOUT");
+  if (now < debt.deadlineAt) return rejected(state, "DEBT_DEADLINE_NOT_EXPIRED");
+  return accepted(
+    acceptedState(state, env, { ruleState: { ...state.ruleState, debt: { ...debt, bankruptcyRequired: true } } }),
+    { type: "DEBT_HANDOFF", resolutionId, obligation },
+  );
+}
+
+function endCurrentTurn(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const guard = turnOwnerRejection(state, env.actorUserId);
+  if (guard !== null) return rejected(state, guard);
+  const turn = state.turn as TurnIdentity;
+  if (!turn.hasRolled || turn.rollAgain) return rejected(state, "ROLL_REQUIRED");
 
   const eligiblePlayers = state.players.filter((player) => player.status === "ACTIVE");
   if (eligiblePlayers.length <= 1) {
     const winnerUserId = eligiblePlayers[0]?.userId ?? null;
-    const nextState = acceptedState(state, board, nextGameVersion, {
-      phase: "GAME_OVER",
-      turn: null,
-    });
-    return Object.freeze({
-      kind: "ACCEPTED",
-      state: nextState,
-      event: Object.freeze({
-        type: "GAME_ENDED",
-        endedPlayerId: actorUserId,
-        winnerUserId,
-      }),
-    });
+    const nextState = acceptedState(state, env, { phase: "GAME_OVER", turn: null });
+    return accepted(nextState, { type: "GAME_ENDED", endedPlayerId: env.actorUserId, winnerUserId });
   }
 
-  const currentIndex = state.players.findIndex((player) => player.userId === actorUserId);
+  const currentIndex = state.players.findIndex((player) => player.userId === env.actorUserId);
   for (let offset = 1; offset <= state.players.length; offset += 1) {
     const candidate = state.players[(currentIndex + offset) % state.players.length];
     if (candidate?.status !== "ACTIVE") continue;
-
-    const nextState = acceptedState(state, board, nextGameVersion, {
+    const nextState = acceptedState(state, env, {
       turn: nextTurn(turn.turnNumber + 1, candidate.userId),
     });
-    return Object.freeze({
-      kind: "ACCEPTED",
-      state: nextState,
-      event: Object.freeze({
-        type: "TURN_ENDED",
-        endedPlayerId: actorUserId,
-        activePlayerId: candidate.userId,
-      }),
+    return accepted(nextState, {
+      type: "TURN_ENDED",
+      endedPlayerId: env.actorUserId,
+      activePlayerId: candidate.userId,
     });
   }
 
@@ -1122,7 +1638,7 @@ export function applyGameplayCommand(
   context: GameplayCommandContext,
 ): GameplayCommandResult {
   const board = parseBoardDefinition(context.board);
-  const state = parseGameState(stateInput, board);
+  const state = parseGameState(stateInput, board, context.cardCatalog);
   const command = parseGameCommand(commandInput);
   const type = gameplayCommand(command);
   const actorUserId = identifier(context.actorUserId, "context.actorUserId");
@@ -1142,70 +1658,38 @@ export function applyGameplayCommand(
         currentGameVersion: decision.currentGameVersion,
       });
     case "NEW_ACTION":
-      switch (type) {
-        case "CONFIGURE_MATCH":
-          return configureMatch(state, board, command, actorUserId, decision.nextGameVersion);
-        case "START_GAME":
-          return startGame(state, board, actorUserId, decision.nextGameVersion);
-        case "ROLL_DICE":
-          return rollCurrentPlayer(
-            state,
-            board,
-            actorUserId,
-            context.rng,
-            decision.nextGameVersion,
-          );
-        case "END_TURN":
-          return endCurrentTurn(state, board, actorUserId, decision.nextGameVersion);
-        case "BUY_PROPERTY":
-          return buyProperty(state, board, command, actorUserId, decision.nextGameVersion);
-        case "DECLINE_PROPERTY":
-          return declineProperty(
-            state,
-            board,
-            command,
-            actorUserId,
-            decision.nextGameVersion,
-            context.auctionDecisionDeadlineAt,
-          );
-        case "PLACE_BID":
-          return placeBid(
-            state,
-            board,
-            command,
-            actorUserId,
-            decision.nextGameVersion,
-            context.auctionDecisionDeadlineAt,
-          );
-        case "PASS_AUCTION":
-          return passAuction(
-            state,
-            board,
-            command,
-            actorUserId,
-            decision.nextGameVersion,
-            context.auctionDecisionDeadlineAt,
-            false,
-          );
-        case "AUCTION_TIMEOUT":
-          return timeoutAuction(
-            state,
-            board,
-            command,
-            decision.nextGameVersion,
-            context.currentTime,
-            context.auctionDecisionDeadlineAt,
-          );
-        case "BUILD":
-          return build(state, board, command, actorUserId, decision.nextGameVersion);
-        case "MORTGAGE":
-          return changeMortgage(
-            state, board, command, actorUserId, decision.nextGameVersion, true,
-          );
-        case "UNMORTGAGE":
-          return changeMortgage(
-            state, board, command, actorUserId, decision.nextGameVersion, false,
-          );
-      }
+      break;
+  }
+  const env: RuleEnv = {
+    board,
+    catalog: context.cardCatalog,
+    context,
+    command,
+    actorUserId,
+    nextGameVersion: decision.nextGameVersion,
+  };
+  switch (type) {
+    case "CONFIGURE_MATCH": return configureMatch(state, env);
+    case "START_GAME": return startGame(state, env);
+    case "ROLL_DICE": return rollCurrentPlayer(state, env);
+    case "END_TURN": return endCurrentTurn(state, env);
+    case "BUY_PROPERTY": return buyProperty(state, env);
+    case "DECLINE_PROPERTY": return declineProperty(state, env);
+    case "PLACE_BID": return placeBid(state, env);
+    case "PASS_AUCTION": return passAuction(state, env, false);
+    case "AUCTION_TIMEOUT": return timeoutAuction(state, env);
+    case "BUILD": return build(state, env);
+    case "SELL_DEVELOPMENT": return sellDevelopment(state, env);
+    case "MORTGAGE": return changeMortgage(state, env, true);
+    case "UNMORTGAGE": return changeMortgage(state, env, false);
+    case "DRAW_CARD": return drawPendingCard(state, env);
+    case "PAY_HOLDING_FEE": return payHoldingFee(state, env);
+    case "USE_RELEASE_CARD": return useReleaseCard(state, env);
+    case "PROPOSE_TRADE": return openTrade(state, env, null);
+    case "COUNTER_TRADE": return counterTrade(state, env);
+    case "ACCEPT_TRADE": return acceptTrade(state, env);
+    case "REJECT_TRADE": return closeTrade(state, env, "REJECTED");
+    case "CANCEL_TRADE": return closeTrade(state, env, "CANCELLED");
+    case "DEBT_TIMEOUT": return timeoutDebt(state, env);
   }
 }

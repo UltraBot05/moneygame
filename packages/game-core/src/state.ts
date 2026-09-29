@@ -2,6 +2,13 @@ import { parseBoardDefinition, type BoardDefinition } from "./board";
 import type { DiceRoll } from "./dice";
 import { validStartingCash } from "./economy";
 import { assertLobbyCanStart } from "./lobby";
+import type { CardCatalogDefinition } from "./cards";
+import {
+  EMPTY_ADVANCED_RULE_STATE,
+  parseAdvancedRuleState,
+  validateAdvancedRuleStateCatalog,
+  type AdvancedRuleState,
+} from "./advanced-rules";
 
 export type PlayerStatus = "ACTIVE" | "BANKRUPT";
 export type GamePhase = "STARTING" | "ACTIVE_TURN" | "GAME_OVER";
@@ -29,6 +36,8 @@ export interface PlayerState {
   readonly position: number;
   readonly status: PlayerStatus;
   readonly inHolding: boolean;
+  /** Failed roll-for-doubles attempts during the current Holding stay (0-2). */
+  readonly holdingAttempts: number;
 }
 
 export type AssetState =
@@ -118,6 +127,8 @@ export interface TurnIdentity {
   readonly rollAgain: boolean;
   readonly consecutiveDoubles: number;
   readonly developmentActionsUsed: number;
+  /** This turn's roll was a Holding attempt, so doubles on it never continue the turn. */
+  readonly rollFromHolding: boolean;
 }
 
 export interface GameState {
@@ -131,6 +142,7 @@ export interface GameState {
   readonly assets: readonly AssetState[];
   readonly pendingResolution: PendingResolution | null;
   readonly auction: AuctionState | null;
+  readonly ruleState: AdvancedRuleState;
 }
 
 export interface CreateInitialGameStateInput {
@@ -223,7 +235,9 @@ function parseBoardIdentity(value: unknown, board: BoardDefinition): GameBoardId
 function parsePlayer(value: unknown, index: number, tileCount: number): PlayerState {
   const path = "$.players[" + index + "]";
   const object = objectAt(value, path);
-  exactKeys(object, ["userId", "seatIndex", "cash", "position", "status", "inHolding"], path);
+  exactKeys(
+    object, ["userId", "seatIndex", "cash", "position", "status", "inHolding", "holdingAttempts"], path,
+  );
   const seatIndex = integerAt(object.seatIndex, path + ".seatIndex");
   if (seatIndex !== index) fail(path + ".seatIndex", "must match ordered seat position");
   const status =
@@ -233,6 +247,10 @@ function parsePlayer(value: unknown, index: number, tileCount: number): PlayerSt
   if (object.inHolding !== true && object.inHolding !== false) {
     fail(path + ".inHolding", "expected a boolean");
   }
+  const holdingAttempts = integerAt(object.holdingAttempts, path + ".holdingAttempts", 0, 2);
+  if (!object.inHolding && holdingAttempts !== 0) {
+    fail(path + ".holdingAttempts", "only a player in Holding has attempts");
+  }
   return {
     userId: identifierAt(object.userId, path + ".userId"),
     seatIndex,
@@ -240,6 +258,7 @@ function parsePlayer(value: unknown, index: number, tileCount: number): PlayerSt
     position: integerAt(object.position, path + ".position", 0, tileCount - 1),
     status,
     inHolding: object.inHolding,
+    holdingAttempts,
   };
 }
 
@@ -321,7 +340,7 @@ function parseTurn(value: unknown, playerIds: ReadonlySet<string>): TurnIdentity
   exactKeys(
     object,
     ["turnId", "activePlayerId", "turnNumber", "hasRolled", "rollAgain", "consecutiveDoubles",
-      "developmentActionsUsed"],
+      "developmentActionsUsed", "rollFromHolding"],
     "$.turn",
   );
   if (object.hasRolled !== true && object.hasRolled !== false) {
@@ -346,6 +365,12 @@ function parseTurn(value: unknown, playerIds: ReadonlySet<string>): TurnIdentity
   if (object.rollAgain !== (consecutiveDoubles > 0)) {
     fail("$.turn", "rollAgain must match the consecutive doubles count");
   }
+  if (object.rollFromHolding !== true && object.rollFromHolding !== false) {
+    fail("$.turn.rollFromHolding", "expected a boolean");
+  }
+  if (object.rollFromHolding && (!object.hasRolled || object.rollAgain)) {
+    fail("$.turn.rollFromHolding", "a Holding roll is a completed roll without continuation");
+  }
   const turn = {
     turnId: identifierAt(object.turnId, "$.turn.turnId"),
     activePlayerId: identifierAt(object.activePlayerId, "$.turn.activePlayerId"),
@@ -354,6 +379,7 @@ function parseTurn(value: unknown, playerIds: ReadonlySet<string>): TurnIdentity
     rollAgain: object.rollAgain,
     consecutiveDoubles,
     developmentActionsUsed,
+    rollFromHolding: object.rollFromHolding,
   };
   if (!playerIds.has(turn.activePlayerId)) {
     fail("$.turn.activePlayerId", "must identify a player in this game");
@@ -416,6 +442,25 @@ function parseRoll(value: unknown, path: string): DiceRoll | null {
     consecutiveDoubles,
     isThirdConsecutiveDouble: first === second && consecutiveDoubles === 3,
   };
+}
+
+/** The persisted roll must be this turn's latest roll and agree with its continuation. */
+function assertRollMatchesTurn(
+  roll: DiceRoll,
+  turn: TurnIdentity,
+  continuation: ResolutionContinuation,
+  path: string,
+): void {
+  if (turn.rollFromHolding) {
+    if (roll.consecutiveDoubles > 1) fail(path + ".consecutiveDoubles", "a Holding roll starts a new streak");
+  } else if (roll.consecutiveDoubles !== turn.consecutiveDoubles) {
+    fail(path + ".consecutiveDoubles", "must match the current turn");
+  }
+  if (continuation.type === "RESUME_EFFECT") return;
+  const expectedContinuation = turn.rollAgain ? "ROLL_AGAIN" : "END_TURN";
+  if (continuation.type !== expectedContinuation) {
+    fail(path, "continuation must match the authoritative roll continuation");
+  }
 }
 
 function parseSource(value: unknown, path: string, board: BoardDefinition): ResolutionSource {
@@ -564,13 +609,15 @@ function parsePending(
     fail(path + ".continuation", "ROLL_AGAIN requires canonical doubles continuation");
   }
   if (roll !== null) {
-    if (roll.consecutiveDoubles !== turn.consecutiveDoubles) {
-      fail(path + ".roll.consecutiveDoubles", "must match the current turn");
-    }
-    const expectedContinuation = turn.rollAgain ? "ROLL_AGAIN" : "END_TURN";
-    if (continuation.type !== expectedContinuation) {
-      fail(path + ".continuation", "must match the authoritative roll continuation");
-    }
+    if (!turn.hasRolled) fail(path + ".roll", "a persisted roll requires a rolled turn");
+    if (continuation.type === "RESUME_EFFECT") fail(path + ".roll", "effect resolutions keep their roll in ruleState");
+    assertRollMatchesTurn(roll, turn, continuation, path + ".roll");
+  }
+  if (continuation.type === "RESUME_EFFECT" && (source.type !== "EFFECT" || obligation === null)) {
+    fail(path + ".continuation", "only an effect obligation suspends an effect chain");
+  }
+  if (kind === "DETENTION_FEE" && (obligation === null || roll === null)) {
+    fail(path, "a Holding fee resolution owes the fee and keeps the release roll");
   }
   return {
     resolutionId: identifierAt(object.resolutionId, path + ".resolutionId"),
@@ -866,16 +913,38 @@ function freezeGameState(state: GameState): GameState {
     Object.freeze(state.auction.continuation);
     Object.freeze(state.auction);
   }
+  Object.freeze(state.ruleState);
   return Object.freeze(state);
 }
 
-export function parseGameState(input: unknown, boardInput: BoardDefinition): GameState {
+export function holdingTileIndex(board: BoardDefinition): number {
+  const tile = board.economyProfile.tiles.find((candidate) =>
+    candidate.type === "corner" && candidate.name === "HOLDING"
+  );
+  if (tile === undefined) throw new RangeError("board has no canonical Holding tile");
+  return tile.index;
+}
+
+/**
+ * Parses and cross-validates canonical GameState. A catalog is required once card state exists,
+ * so reconstruction always proves deck conservation.
+ */
+export function parseGameState(
+  input: unknown,
+  boardInput: BoardDefinition,
+  cardCatalog?: CardCatalogDefinition,
+): GameState {
   const board = parseBoardDefinition(boardInput);
   const root = objectAt(input, "$");
+  const rootKeys = [
+    "gameId", "gameVersion", "board", "settings", "phase", "turn", "players", "assets",
+    "pendingResolution", "auction",
+  ];
   exactKeys(
     root,
-    ["gameId", "gameVersion", "board", "settings", "phase", "turn", "players", "assets",
-      "pendingResolution", "auction"],
+    Object.prototype.hasOwnProperty.call(root, "ruleState")
+      ? [...rootKeys, "ruleState"]
+      : rootKeys,
     "$",
   );
   const gameVersion = integerAt(root.gameVersion, "$.gameVersion");
@@ -955,6 +1024,61 @@ export function parseGameState(input: unknown, boardInput: BoardDefinition): Gam
     }
   }
   const auction = parseAuction(root.auction, pendingResolution, players, assets, gameVersion);
+  const ruleState = parseAdvancedRuleState(
+    Object.prototype.hasOwnProperty.call(root, "ruleState") ? root.ruleState : EMPTY_ADVANCED_RULE_STATE,
+    {
+      playerIds,
+      activePlayerIds: new Set(
+        players.filter((player) => player.status === "ACTIVE").map((player) => player.userId),
+      ),
+      assetIds: seenAssetIds,
+      tileCount: board.tileCount,
+      parseRoll: (value, path) => parseRoll(value, path) ?? fail(path, "expected a roll"),
+    },
+  );
+  if (ruleState.decks.length > 0 || ruleState.heldCards.length > 0 || ruleState.effectContinuation !== null) {
+    if (cardCatalog === undefined) fail("$.ruleState", "card catalog is required to reconstruct card state");
+    validateAdvancedRuleStateCatalog(ruleState, cardCatalog);
+  }
+  const obligation = pendingResolution?.obligation ?? null;
+  if ((ruleState.debt === null) !== (obligation === null)
+    || (ruleState.debt !== null && ruleState.debt.resolutionId !== pendingResolution?.resolutionId)) {
+    fail("$.ruleState.debt", "debt metadata must exist exactly for the pending obligation");
+  }
+  const suspended = ruleState.effectContinuation;
+  const resumesEffect = pendingResolution?.continuation.type === "RESUME_EFFECT";
+  if ((suspended === null) === resumesEffect) {
+    fail("$.ruleState.effectContinuation", "must exist exactly for a suspended effect resolution");
+  }
+  if (suspended !== null && turn !== null) {
+    if (
+      suspended.resolutionId !== pendingResolution?.resolutionId
+      || suspended.actorUserId !== pendingResolution.actorUserId
+      || pendingResolution.source.type !== "EFFECT"
+      || suspended.originTileIndex !== pendingResolution.source.originTileIndex
+    ) {
+      fail("$.ruleState.effectContinuation", "must match its pending effect resolution");
+    }
+    assertRollMatchesTurn(
+      suspended.roll, turn, pendingResolution.continuation, "$.ruleState.effectContinuation.roll",
+    );
+  }
+  const holdingIndex = holdingTileIndex(board);
+  for (const [index, player] of players.entries()) {
+    if (player.inHolding && player.position !== holdingIndex) {
+      fail("$.players[" + index + "].position", "a player in Holding must be on the Holding tile");
+    }
+  }
+  if (pendingResolution?.kind === "DETENTION_FEE") {
+    const actor = players.find((player) => player.userId === pendingResolution.actorUserId);
+    if (
+      !actor?.inHolding
+      || pendingResolution.source.type !== "TILE"
+      || pendingResolution.source.tileIndex !== holdingIndex
+    ) {
+      fail("$.pendingResolution", "a Holding fee belongs to a held player on the Holding tile");
+    }
+  }
 
   if (pendingResolution?.source.type === "TILE") {
     const tileIndex = pendingResolution.source.tileIndex;
@@ -1013,6 +1137,7 @@ export function parseGameState(input: unknown, boardInput: BoardDefinition): Gam
     assets,
     pendingResolution,
     auction,
+    ruleState,
   });
 }
 
@@ -1077,10 +1202,12 @@ export function createInitialGameState(input: CreateInitialGameStateInput): Game
         position: 0,
         status: "ACTIVE",
         inHolding: false,
+        holdingAttempts: 0,
       })),
       assets,
       pendingResolution: null,
       auction: null,
+      ruleState: EMPTY_ADVANCED_RULE_STATE,
     },
     board,
   );

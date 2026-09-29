@@ -150,6 +150,10 @@ function parseEffect(value: unknown, index: number, board: BoardDefinition): Eff
       }
       const amount = integerAt(object.amount, path + ".amount");
       if (amount === 0) fail(path + ".amount", "cash adjustment must be non-zero");
+      // Obligations have a single debtor (the current player), so only they may be charged.
+      if (amount < 0 && target !== "CURRENT_PLAYER") {
+        fail(path + ".amount", "only the current player may be charged");
+      }
       return { effectId, type: object.type, target, amount };
     }
     case "MOVE_TO_TILE": {
@@ -238,6 +242,24 @@ function assertNoStaticEffectCycles(
   for (const effect of effects) visit(effect.effectId);
 }
 
+/** Movement, draws and Holding entry end a chain, so they may only be the last sequence step. */
+function assertTerminalMovement(effects: readonly EffectDefinition[]): void {
+  const byId = new Map(effects.map((effect) => [effect.effectId, effect]));
+  const openEnded = (effectId: string): boolean => {
+    const effect = byId.get(effectId);
+    if (effect === undefined) return false;
+    if (effect.type === "SEQUENCE") return effect.effectIds.some(openEnded);
+    return effect.type === "MOVE_TO_TILE" || effect.type === "MOVE_BY"
+      || effect.type === "ENTER_DETENTION" || effect.type === "DRAW_CARD";
+  };
+  for (const effect of effects) {
+    if (effect.type !== "SEQUENCE") continue;
+    if (effect.effectIds.slice(0, -1).some(openEnded)) {
+      fail("$.effects", "movement, draws and Holding entry must end their sequence: " + effect.effectId);
+    }
+  }
+}
+
 function freezeCatalog(catalog: CardCatalogDefinition): CardCatalogDefinition {
   catalog.decks.forEach((deck) => {
     Object.freeze(deck.cardIds);
@@ -317,6 +339,13 @@ export function parseCardCatalog(input: unknown, boardInput: BoardDefinition): C
     }
   }
   assertNoStaticEffectCycles(effects, decks, cards);
+  assertTerminalMovement(effects);
+  // Non-held cards never leave draw/discard, so one per deck guarantees a draw is always possible.
+  for (const deck of decks) {
+    if (deck.cardIds.every((cardId) => cardById.get(cardId)?.heldCapability !== null)) {
+      fail("$.decks", "deck needs at least one card that cannot be held: " + deck.deckId);
+    }
+  }
   return freezeCatalog({ decks, cards, effects });
 }
 

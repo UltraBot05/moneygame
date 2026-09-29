@@ -71,6 +71,7 @@ describe("CORE-006 turn lifecycle", () => {
       rollAgain: false,
       consecutiveDoubles: 0,
       developmentActionsUsed: 0,
+      rollFromHolding: false,
     });
     expect(replay.turn).toEqual(first.turn);
   });
@@ -374,11 +375,17 @@ describe("CORE-012 doubles continuation integration", () => {
       command("ROLL_DICE", "double-3", state.gameVersion),
       context("google:carol", () => 0),
     ));
+    // RULE-013: a third consecutive double goes straight to Holding without moving or salary.
     expect(third.event).toMatchObject({
       type: "DICE_ROLLED",
       roll: { consecutiveDoubles: 3, isThirdConsecutiveDouble: true },
+      movement: null,
+      holding: "ENTERED",
     });
-    expect(third.state.turn).toMatchObject({ rollAgain: true, consecutiveDoubles: 3 });
+    expect(third.state.turn).toMatchObject({ hasRolled: true, rollAgain: false, consecutiveDoubles: 0 });
+    const held = third.state.players.find((player) => player.userId === "google:carol");
+    expect(held).toMatchObject({ position: 10, inHolding: true, holdingAttempts: 0 });
+    expect(held?.cash).toBe(state.players.find((player) => player.userId === "google:carol")?.cash);
   });
 
   it("replays the same continuation sequence from the same state and seed", () => {
