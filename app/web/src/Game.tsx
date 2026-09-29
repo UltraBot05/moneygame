@@ -291,7 +291,7 @@ function CenterStage(props: StageProps) {
         </div>
         {lastLine !== null && lastLine !== undefined && (
           <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-            <span className="label" style={{ color: "var(--brass)" }}>Last</span>
+            <span className="label" style={{ color: "var(--brass-text)" }}>Last</span>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{lastLine}</span>
           </div>
         )}
@@ -555,7 +555,7 @@ function TradeInbox({ game, room, viewerUserId, onTrade, busy, act }: RailProps)
         const incoming = trade.recipientUserId === viewerUserId;
         return (
           <div key={trade.tradeId} className="notice">
-            <span className="label" style={{ color: "var(--brass)" }}>{incoming ? "Offer" : "Sent"}</span>
+            <span className="label" style={{ color: "var(--brass-text)" }}>{incoming ? "Offer" : "Sent"}</span>
             <span style={{ flex: 1 }}>{incoming ? "From " + nameOf(room, trade.proposerUserId) : "To " + nameOf(room, trade.recipientUserId)}</span>
             {incoming
               ? <button type="button" className="btn btn-dark" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => onTrade({ mode: "REVIEW", tradeId: trade.tradeId })}>Review</button>
@@ -721,7 +721,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
             <DeedPanel game={game} board={board} tileIndex={selected} viewerUserId={viewerUserId} players={players} busy={busy} act={act} onClose={() => setSelected(null)} />
           )}
           {snapshot.notice !== null && (
-            <button type="button" className="banner" onClick={() => client.dismissNotice()}>{snapshot.notice.text} ✕</button>
+            <button type="button" className="banner" role="status" onClick={() => client.dismissNotice()}>{snapshot.notice.text} ✕</button>
           )}
           {room.paused && game.phase === "ACTIVE_TURN" && <PausedOverlay isHost={isHost} onResume={() => client.room({ kind: "RESUME" })} />}
           {game.phase === "GAME_OVER" && (

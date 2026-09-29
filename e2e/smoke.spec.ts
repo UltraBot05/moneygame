@@ -49,3 +49,17 @@ test("grand board seats ten players without page scroll", async ({ page }) => {
   await page.getByRole("button", { name: /^Cairo/ }).click();
   await expect(page.getByRole("dialog", { name: "Cairo deed" })).toContainText("Landmark");
 });
+
+test("keyboard: dialogs take focus and Escape closes panels", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/dev/preview?board=grand&players=8");
+  await page.getByRole("button", { name: /^Cairo/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Cairo deed" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Cairo deed" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Trade", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Trade" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Trade" })).toHaveCount(0);
+});

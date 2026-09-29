@@ -41,5 +41,9 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
       - run: pnpm test:e2e
+        env:
+          CROSS_BROWSER: "1"
+      # QA-012: real Worker + Durable Objects + local D1 under wrangler dev, several browsers.
+      - run: pnpm test:e2e:live

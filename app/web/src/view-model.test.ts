@@ -7,7 +7,7 @@ import {
   type GameState,
 } from "@moneygame/game-core";
 import { DEFAULT_ROOM_SETTINGS, type RoomView } from "@moneygame/shared";
-import { boardModel, deedModel, describeEvent, fitName, money, playerModels, turnModel } from "./view-model";
+import { boardModel, deedModel, describeEvent, fitName, money, PLAYER_COLORS, playerModels, textOn, turnModel } from "./view-model";
 
 const REF = "world-tour-standard@1";
 const { board, cards } = canonicalBoard(REF);
@@ -56,6 +56,13 @@ describe("board model", () => {
     for (const tile of [...boardModel(REF).tiles, ...boardModel("world-tour-grand@1").tiles]) {
       expect(fitName(tile.name, 6.5).fit, tile.name).toBeGreaterThanOrEqual(0.7);
     }
+  });
+
+  it("picks AA-contrast initials for every token colour", () => {
+    expect(textOn("#8FB015")).toBe("#1B2129");
+    expect(textOn("#E08A1E")).toBe("#1B2129");
+    expect(textOn("#2E77A6")).toBe("#FFFFFF");
+    expect(PLAYER_COLORS.map(textOn).filter((color) => color === "#1B2129").length).toBeGreaterThan(0);
   });
 
   it("formats money with separators and sign", () => {

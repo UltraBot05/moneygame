@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { AssetState, ProjectedGameState, TradeBundle } from "@moneygame/game-core";
 import type { RoomView } from "@moneygame/shared";
 import {
@@ -8,6 +8,7 @@ import {
   PATTERN_CSS,
   standings,
   tileBand,
+  textOn,
   tradeable,
   type BoardModel,
   type CommandIntent,
@@ -17,10 +18,18 @@ import {
 export function Token({ player, size, active = false }: { player: PlayerModel; size?: number; active?: boolean }) {
   const style: CSSProperties = {
     background: player.color,
+    color: textOn(player.color),
     ...(player.ring === null ? {} : { outline: "2px solid " + player.ring, outlineOffset: 1 }),
     ...(size === undefined ? {} : { width: size, height: size, fontSize: size * 0.4 }),
   };
   return <span className={"token" + (active ? " active" : "")} style={style} title={player.name}>{player.initials}</span>;
+}
+
+/** Moves focus into a dialog when it opens, so keyboard and screen-reader users land in it. */
+function useDialogFocus() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => ref.current?.focus(), []);
+  return ref;
 }
 
 export type TradeDraft =
@@ -30,9 +39,10 @@ export type TradeDraft =
 export function ConfirmDialog({ title, body, confirmLabel, onConfirm, onCancel }: {
   title: string; body: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void;
 }) {
+  const focus = useDialogFocus();
   return (
     <div className="overlay fixed" role="presentation">
-      <div className="dialog" role="alertdialog" aria-label={title} style={{ width: "min(440px, 100%)" }}>
+      <div ref={focus} tabIndex={-1} className="dialog" role="alertdialog" aria-label={title} style={{ width: "min(440px, 100%)" }}>
         <div className="dialog-head"><span className="dialog-title" style={{ fontSize: 22 }}>{title}</span></div>
         <div className="dialog-body">
           <p className="requirement" style={{ margin: 0 }}>{body}</p>
@@ -47,9 +57,10 @@ export function ConfirmDialog({ title, body, confirmLabel, onConfirm, onCancel }
 }
 
 export function PausedOverlay({ isHost, onResume }: { isHost: boolean; onResume: () => void }) {
+  const focus = useDialogFocus();
   return (
     <div className="overlay" role="dialog" aria-label="Match paused">
-      <div className="dialog" style={{ width: "min(380px, 100%)" }}>
+      <div ref={focus} tabIndex={-1} className="dialog" style={{ width: "min(380px, 100%)" }}>
         <div className="dialog-head dialog-head-dark"><span className="label" style={{ color: "var(--brass-light)" }}>Paused</span></div>
         <div className="dialog-body">
           <span className="dialog-title">Match paused</span>
@@ -69,9 +80,10 @@ export function EndgameDialog({ game, room, players, isHost, onRematch }: {
   const outcome = game.ruleState.outcome;
   const ranked = standings(game, players);
   const winners = outcome?.winnerUserIds ?? [];
+  const focus = useDialogFocus();
   return (
     <div className="overlay overlay-strong" role="dialog" aria-label="Final standings">
-      <div className="dialog" style={{ width: "min(520px, 100%)" }}>
+      <div ref={focus} tabIndex={-1} className="dialog" style={{ width: "min(520px, 100%)" }}>
         <div className="dialog-head dialog-head-dark">
           <span className="label" style={{ color: "var(--brass-light)" }}>Match over</span>
           {outcome?.winningTeamId != null && <span className="label" style={{ marginLeft: "auto" }}>Team {outcome.winningTeamId} wins</span>}
@@ -84,7 +96,7 @@ export function EndgameDialog({ game, room, players, isHost, onRematch }: {
                 <span className="tabular" style={{ width: 22, fontWeight: 900, fontSize: 18 }}>{index + 1}</span>
                 <Token player={player} size={28} />
                 <span style={{ fontWeight: 800, flex: 1 }}>{player.name}</span>
-                {winners.includes(player.userId) && <span className="label" style={{ color: "var(--brass)" }}>Winner</span>}
+                {winners.includes(player.userId) && <span className="label" style={{ color: "var(--brass-text)" }}>Winner</span>}
                 <span className="tabular" style={{ fontWeight: 800 }}>{player.bankrupt ? "Bankrupt" : money(player.netWorth)}</span>
               </div>
             ))}
@@ -181,6 +193,7 @@ export function TradeDialog({ draft, game, room, board, players, viewerUserId, b
   const net = bundleValue(board, game, theirs) - bundleValue(board, game, mine);
   const empty = mine.cash === 0 && theirs.cash === 0 && mine.assetIds.length === 0 && theirs.assetIds.length === 0;
   const partnerModel = players.find((player) => player.userId === partner);
+  const focus = useDialogFocus();
   const send = () => {
     if (partner === null) return;
     if (countering && reviewing !== null) {
@@ -191,7 +204,7 @@ export function TradeDialog({ draft, game, room, board, players, viewerUserId, b
   };
   return (
     <div className="overlay fixed" role="presentation">
-      <div className="dialog" role="dialog" aria-label="Trade" style={{ width: "min(900px, 100%)", height: partner === null ? "auto" : "min(640px, 100%)" }}>
+      <div ref={focus} tabIndex={-1} className="dialog" role="dialog" aria-label="Trade" style={{ width: "min(900px, 100%)", height: partner === null ? "auto" : "min(640px, 100%)" }}>
         <div className="dialog-head">
           <span className="dialog-title" style={{ fontSize: 24 }}>{draft.mode === "REVIEW" && !countering ? "Trade offer" : countering ? "Counter offer" : "Propose a trade"}</span>
           {draft.mode === "COMPOSE" && (
