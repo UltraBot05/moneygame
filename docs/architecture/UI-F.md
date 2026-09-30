@@ -44,6 +44,13 @@ is retired; only its size-agnostic layout math (`app/web/src/board/layout.ts`) r
 11. **One Roll button**: on the board beside the dice on desktop, in the rail on phones (where the
    board scrolls). The centre stage sizes with the board (container units) so nothing overlaps.
 12. **Resign** sits under the turn panel's Trade and Manage deeds buttons, behind a confirmation.
+13. **One dark game surface** (owner request, after comparing with Richup): the board, centre and
+   rail share the dark slate palette so pawns and owner colours carry the board; paper stays for
+   cards, deeds and dialogs. An owned tile shows a solid strip in the owner's colour (with their
+   initials) along its outer edge, hatched when mortgaged. The centre shows the latest log lines
+   under the dice. New text colours on dark all meet WCAG AA (lowest 5.3:1).
+14. **Player spotlight**: hovering or keyboard-focusing a player in the list keeps that player's
+   deeds and pawn tile in full colour, outlined in their colour, and dims the rest of the board.
 
 ## Dev preview
 
