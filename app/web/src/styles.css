@@ -181,48 +181,59 @@ button.tile:hover { background: #2f3945; }
   white-space: nowrap; overflow: hidden;
 }
 .tile[data-edge="left"] .tile-code, .tile[data-edge="right"] .tile-code { writing-mode: vertical-rl; }
+/* A tile: set band (inner edge) | name, then the pawn zone | price or owner strip (outer edge). */
 .tile-body {
   flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
-  padding: calc(var(--unit) * 0.07); gap: calc(var(--unit) * 0.03);
+  padding: calc(var(--unit) * 0.06) calc(var(--unit) * 0.06) calc(var(--unit) * 0.02); gap: calc(var(--unit) * 0.03);
 }
-.tile-glyph { font-size: calc(var(--unit) * 0.2); line-height: 1; }
 .tile-name {
-  font-weight: 800; text-transform: uppercase; letter-spacing: 0.005em; line-height: 1.12;
+  flex: none; font-weight: 800; text-transform: uppercase; letter-spacing: 0.005em; line-height: 1.12;
   font-size: calc(var(--unit) * 0.16 * var(--fit, 1)); overflow: hidden; overflow-wrap: normal; hyphens: manual;
   max-height: calc(var(--unit) * 0.36);
 }
-.tile-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-.tile-price { font-weight: 700; font-size: calc(var(--unit) * 0.12); color: var(--on-slate-mute); }
-.tile-dev { display: grid; grid-template-columns: repeat(2, calc(var(--unit) * 0.11)); gap: 1px; }
-.tile-dev i { display: block; width: calc(var(--unit) * 0.11); height: calc(var(--unit) * 0.11); background: var(--positive-light); }
-.tile-dev i.landmark { grid-column: span 2; width: 100%; background: var(--brass); }
-/* Ownership: a solid strip in the owner's colour along the tile's outer edge, readable across the board. */
-.tile-own {
-  flex: none; display: grid; place-items: center; overflow: hidden;
-  font-weight: 900; letter-spacing: 0.08em; line-height: 1; font-size: calc(var(--unit) * 0.12);
+/* The pawn zone: below the name, so pawns never cover it. Special tiles show their icon here. */
+.tile-zone { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; }
+.tile-glyph { font-size: calc(var(--unit) * 0.3); line-height: 1; }
+/* Buildings sit on the set band in place of its code. */
+.tile-dev { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: calc(var(--unit) * 0.03); }
+.tile[data-edge="left"] .tile-dev, .tile[data-edge="right"] .tile-dev { flex-direction: column; }
+.tile-dev i { display: block; width: calc(var(--unit) * 0.12); height: calc(var(--unit) * 0.12); background: #fff; box-shadow: 0 0 0 1px #00000099; }
+.tile-dev i.landmark { width: calc(var(--unit) * 0.34); background: var(--brass-light); }
+.tile[data-edge="left"] .tile-dev i.landmark, .tile[data-edge="right"] .tile-dev i.landmark { width: calc(var(--unit) * 0.12); height: calc(var(--unit) * 0.34); }
+/* Outer strip: the price while unowned, a solid block in the owner's colour (with initials) once bought. */
+.tile-strip {
+  flex: none; display: grid; place-items: center; overflow: hidden; background: #1e252c; color: var(--on-slate-mute);
+  font-weight: 700; line-height: 1; font-size: calc(var(--unit) * 0.12); white-space: nowrap;
 }
-.tile[data-edge="bottom"] .tile-own, .tile[data-edge="top"] .tile-own { height: calc(var(--unit) * 0.22); width: 100%; }
-.tile[data-edge="left"] .tile-own, .tile[data-edge="right"] .tile-own { width: calc(var(--unit) * 0.22); height: 100%; writing-mode: vertical-rl; }
+.tile-strip.owned { font-weight: 900; letter-spacing: 0.08em; }
+.tile[data-edge="bottom"] .tile-strip, .tile[data-edge="top"] .tile-strip { height: calc(var(--unit) * 0.22); width: 100%; }
+.tile[data-edge="left"] .tile-strip, .tile[data-edge="right"] .tile-strip { width: calc(var(--unit) * 0.22); height: 100%; writing-mode: vertical-rl; }
 /* Mortgaged: the owner strip is hatched. */
-.tile-own.mortgaged { background-image: repeating-linear-gradient(45deg, #1b2129 0 3px, transparent 3px 7px); }
-/* Pawns: big, ringed and centred on the tile so they read at a glance (Richup-style). */
+.tile-strip.mortgaged { background-image: repeating-linear-gradient(45deg, #1b2129 0 3px, transparent 3px 7px); }
+/* Pawns: big ringed discs; several on one tile overlap sideways (--n) to fit the zone. */
 .tile-tokens {
+  --pawn: max(16px, calc(var(--unit) * 0.46));
   position: absolute; inset: 0; z-index: 3; pointer-events: none;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center;
-  padding: calc(var(--unit) * 0.04);
+  display: flex; flex-direction: column; justify-content: center;
 }
-.holding-cell .tile-tokens { position: static; inset: auto; padding: 0; }
+.tile-tokens.crowded { --pawn: max(12px, calc(var(--unit) * 0.27)); }
+.token-row { display: flex; align-items: center; justify-content: center; }
+.token-row + .token-row { margin-top: calc(var(--pawn) * -0.12); }
 .tile-tokens .token {
-  --pawn: max(18px, calc(var(--unit) * 0.62));
-  width: var(--pawn); height: var(--pawn); font-size: calc(var(--pawn) * 0.36);
-  margin: calc(var(--pawn) * -0.14);
+  width: var(--pawn); height: var(--pawn); font-size: calc(var(--pawn) * 0.38);
   border: 2px solid #fff; box-shadow: 0 0 0 1px #00000099, 0 3px 8px #000000cc;
 }
+.token-row .token + .token { margin-left: min(calc(var(--pawn) * -0.2), calc((100% - var(--n) * var(--pawn)) / (var(--n) - 1))); }
 .tile-tokens .token.active {
   z-index: 2; position: relative;
   box-shadow: 0 0 0 3px var(--brass-light), 0 0 14px 4px #e3bc63b0, 0 3px 8px #000000aa;
   animation: mg-bob 0.9s ease-in-out infinite;
 }
+/* Corners: the name and icon in the upper part, pawns in the lower part. */
+.corner > .tile-tokens { top: 62%; }
+.holding-cell .tile-tokens { position: static; width: 100%; }
+/* Visiting pawns stand in the strip under the Holding cell. */
+.holding-cell + .tile-tokens { --pawn: max(14px, calc(var(--unit) * 0.36)); top: 72%; left: 28%; }
 /* The tile the active pawn stands on. */
 .tile.tile-active { z-index: 4; box-shadow: inset 0 0 0 3px var(--brass-light), 0 0 0 2px var(--brass); }
 /* Spotlight: a player hovered in the list; their deeds and pawn keep full colour, the rest dims. */
@@ -236,15 +247,16 @@ button.tile:hover { background: #2f3945; }
   align-items: center; justify-content: center;
 }
 .corner-inner {
+  position: absolute; top: 0; left: 0; right: 0; height: 62%;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-  gap: calc(var(--unit) * 0.07); padding: 6px; width: 100%; height: 100%;
+  gap: calc(var(--unit) * 0.05); padding: calc(var(--unit) * 0.06) calc(var(--unit) * 0.08) 0;
 }
 .corner-glyph {
   display: grid; place-items: center; border: 1.5px solid var(--brass); color: var(--brass-light);
-  width: calc(var(--unit) * 0.34); height: calc(var(--unit) * 0.34); font-size: calc(var(--unit) * 0.18);
+  width: calc(var(--unit) * 0.28); height: calc(var(--unit) * 0.28); font-size: calc(var(--unit) * 0.15); flex: none;
 }
-.corner-name { font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.1; font-size: calc(var(--unit) * 0.19); }
-.corner-sub { font-weight: 600; letter-spacing: 0.04em; color: var(--muted); font-size: calc(var(--unit) * 0.13); }
+.corner-name { font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.1; font-size: calc(var(--unit) * 0.17); }
+.corner-sub { font-weight: 600; letter-spacing: 0.02em; color: var(--on-slate-mute); line-height: 1.2; font-size: calc(var(--unit) * 0.11); }
 .holding-cell {
   position: absolute; top: 0; right: 0; width: 72%; height: 72%;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;

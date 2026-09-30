@@ -42,12 +42,17 @@ function clockText(seconds: number | null): string {
   return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
 }
 
-function Band({ tile, className }: { tile: TileModel; className: string }) {
+/** The set band on a tile's inner edge; buildings sit on it (as on a printed board) in place of the code. */
+function Band({ tile, className, level = 0 }: { tile: TileModel; className: string; level?: number }) {
   const band = tileBand(tile);
   if (band === null) return null;
   return (
     <span className={className} style={{ background: band.color, ...PATTERN_CSS[band.pattern] }}>
-      <span className="tile-code">{band.code}</span>
+      {level > 0 ? (
+        <span className="tile-dev" aria-label={level === 4 ? "landmark" : level + " buildings"}>
+          {level === 4 ? <i className="landmark" /> : Array.from({ length: level }, (_unused, index) => <i key={index} />)}
+        </span>
+      ) : <span className="tile-code">{band.code}</span>}
     </span>
   );
 }
@@ -151,9 +156,23 @@ interface TileProps {
   readonly spotHere: boolean;
 }
 
+/**
+ * Pawns in their own area of the tile. Several on one tile overlap sideways (--n) to fit; five or
+ * more (the start of a big match, a full Holding) split into two rows of smaller pawns.
+ */
 function Tokens({ list }: { list: readonly PlayerModel[] }) {
   if (list.length === 0) return null;
-  return <span className="tile-tokens">{list.map((player) => <Token key={player.userId} player={player} active={player.active} />)}</span>;
+  const half = Math.ceil(list.length / 2);
+  const rows = list.length > 4 ? [list.slice(0, half), list.slice(half)] : [list];
+  return (
+    <span className={"tile-tokens" + (rows.length > 1 ? " crowded" : "")}>
+      {rows.map((row, index) => (
+        <span key={index} className="token-row" style={{ "--n": row.length } as CSSProperties}>
+          {row.map((player) => <Token key={player.userId} player={player} active={player.active} />)}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function TileView({ tile, position, game, players, here, selected, activeHere, onSelect, spotlight, spotHere }: TileProps) {
@@ -192,26 +211,25 @@ function TileView({ tile, position, game, players, here, selected, activeHere, o
   const band = tileBand(tile);
   const ownable = asset !== undefined;
   const label = tile.name + (owner === undefined ? "" : ", owned by " + owner.name) + (asset?.mortgaged ? ", mortgaged" : "");
-  const fitted = fitName(tile.name, position.edge === "left" || position.edge === "right" ? 8.5 : 6.5);
+  const price = tile.price !== null ? money(tile.price) : tile.taxAmount !== null ? money(tile.taxAmount) : null;
+  // Side tiles lose width to the outer strip; card tiles (no price) have none and keep the room.
+  const side = position.edge === "left" || position.edge === "right";
+  const fitted = fitName(tile.name, side ? (owner !== undefined || price !== null ? 6 : 8.5) : 6.5);
+  // Inner edge: set band (and buildings). Body: the name, then the pawn area (with the tile's icon
+  // behind it). Outer edge: the price, replaced by the owner's colour once bought.
   const content = (
     <>
-      <Band tile={tile} className="tile-band" />
+      <Band tile={tile} className="tile-band" level={levelCount} />
       <span className="tile-body">
-        {tile.kind !== "property" && band !== null && <span className="tile-glyph" style={{ color: band.color }}>{band.glyph}</span>}
         <span className="tile-name" style={{ "--fit": fitted.fit } as CSSProperties}>{fitted.text}</span>
-        <span className="tile-foot">
-          {owner === undefined && <span className="tile-price tabular">{tile.price !== null ? money(tile.price) : tile.taxAmount !== null ? money(tile.taxAmount) : ""}</span>}
-          {levelCount > 0 && (
-            <span className="tile-dev" aria-label={levelCount === 4 ? "landmark" : levelCount + " buildings"}>
-              {levelCount === 4 ? <i className="landmark" /> : Array.from({ length: levelCount }, (_unused, index) => <i key={index} />)}
-            </span>
-          )}
+        <span className="tile-zone">
+          {tile.kind !== "property" && band !== null && <span className="tile-glyph" style={{ color: "color-mix(in srgb, " + band.color + " 60%, #fff)" }}>{band.glyph}</span>}
+          <Tokens list={here} />
         </span>
       </span>
-      {owner !== undefined && (
-        <span className={"tile-own" + (asset?.mortgaged ? " mortgaged" : "")} style={{ background: owner.color, color: textOn(owner.color) }}>{owner.initials}</span>
-      )}
-      <Tokens list={here} />
+      {owner !== undefined
+        ? <span className={"tile-strip owned" + (asset?.mortgaged ? " mortgaged" : "")} style={{ background: owner.color, color: textOn(owner.color) }}>{owner.initials}</span>
+        : price !== null && <span className="tile-strip tabular">{price}</span>}
     </>
   );
   return ownable ? (

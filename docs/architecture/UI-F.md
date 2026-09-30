@@ -46,9 +46,12 @@ is retired; only its size-agnostic layout math (`app/web/src/board/layout.ts`) r
 12. **Resign** sits under the turn panel's Trade and Manage deeds buttons, behind a confirmation.
 13. **One dark game surface** (owner request, after comparing with Richup): the board, centre and
    rail share the dark slate palette so pawns and owner colours carry the board; paper stays for
-   cards, deeds and dialogs. An owned tile shows a solid strip in the owner's colour (with their
-   initials) along its outer edge, hatched when mortgaged. The centre shows the latest log lines
-   under the dice. New text colours on dark all meet WCAG AA (lowest 5.3:1).
+   cards, deeds and dialogs. A tile reads inner edge to outer edge: set band (buildings sit on it
+   in place of the set code), the name, a pawn zone (special tiles show their icon there), and a
+   strip with the price that turns into the owner's colour and initials once bought (hatched when
+   mortgaged). Pawns stay in their zone so they never cover a name; five or more on one tile split
+   into two rows. The centre shows the latest log lines under the dice. New text colours on dark
+   all meet WCAG AA (lowest 5.3:1).
 14. **Player spotlight**: hovering or keyboard-focusing a player in the list keeps that player's
    deeds and pawn tile in full colour, outlined in their colour, and dims the rest of the board.
 
