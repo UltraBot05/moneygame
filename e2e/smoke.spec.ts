@@ -82,3 +82,21 @@ test("a player can resign mid-match and the turn moves on", async ({ page }) => 
   await page.getByRole("tab", { name: /Game log/ }).click();
   await expect(page.locator(".log-line").first()).toContainText("resigned");
 });
+
+test("hovering or focusing a player lights up their deeds and pawn", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/dev/preview?scene=mid");
+  const board = page.getByRole("group", { name: "World Tour Standard board" });
+  const row = page.locator(".player-row").nth(1);
+  const name = (await row.locator(".player-name").innerText()).split(" · ")[0] as string;
+  const owned = board.getByRole("button", { name: new RegExp(", owned by " + name + "(,|$)") });
+  expect(await owned.count()).toBeGreaterThan(0);
+  await row.hover();
+  await expect(board).toHaveClass(/spotlit/);
+  for (const tile of await owned.all()) await expect(tile).toHaveClass(/tile-lit/);
+  await expect(board.locator(".tile-lit .token[title='" + name + "']")).toHaveCount(1);
+  await page.mouse.move(5, 5);
+  await expect(board).not.toHaveClass(/spotlit/);
+  await row.focus();
+  await expect(board).toHaveClass(/spotlit/);
+});
