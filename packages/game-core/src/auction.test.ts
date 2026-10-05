@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import standardFixture from "../../../boards/world-tour/standard.json";
 import { parseBoardDefinition } from "./board";
-import { CommandValidationError } from "./command";
 import { applyGameplayCommand, type GameplayCommandContext } from "./gameplay";
 import { createInitialGameState, parseGameState, type GameState } from "./state";
 
