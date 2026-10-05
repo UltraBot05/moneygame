@@ -140,7 +140,9 @@ export function botDecision(state: GameState, economy: Economy, policy: Simulati
   const owned = (userId: string) => state.assets.filter((asset) => asset.ownerUserId === userId);
   const auction = state.auction;
   if (auction !== null) {
-    const bidder = player(auction.currentActorUserId);
+    // Open auction: the first participant who is still in and not leading answers (bids its cap or drops out).
+    const bidderId = auction.participantOrder.find((userId) => !auction.passedPlayerIds.includes(userId) && userId !== auction.highBidderUserId) as string;
+    const bidder = player(bidderId);
     const asset = state.assets.find((candidate) => candidate.assetId === auction.assetId) as AssetState;
     const cap = roundToTen(price(economy, asset) * policy.auctionPriceFraction);
     const minimum = auction.highBid === null ? 2 : auction.highBid + 2;

@@ -395,7 +395,11 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
   const tile = asset === undefined ? undefined : board.tiles[asset.tileIndex];
   const me = game.players.find((player) => player.userId === viewerUserId);
   const minimum = auction.highBid === null ? 2 : auction.highBid + 2;
-  const myTurn = auction.currentActorUserId === viewerUserId && me !== undefined;
+  // Open auction: anyone still in may bid at any time; the leader waits for the clock.
+  const inAuction = me?.status === "ACTIVE" && auction.participantOrder.includes(viewerUserId) && !auction.passedPlayerIds.includes(viewerUserId);
+  const leading = auction.highBidderUserId === viewerUserId;
+  const canBid = inAuction && !leading && me !== undefined;
+  const stillIn = auction.participantOrder.filter((userId) => !auction.passedPlayerIds.includes(userId)).length;
   const seconds = secondsLeft(auction.decisionDeadlineAt, now, snapshot.clockOffset);
   const bid = (amount: number) => act({ type: "PLACE_BID", payload: { auctionId: auction.auctionId, amount } });
   const base = auction.highBid ?? 0;
@@ -405,7 +409,7 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
       <div className="stage-head">
         <span className="label" style={{ color: "var(--primary-light)" }}>Auction live</span>
         <span className="label" style={{ color: seconds !== null && seconds <= 5 ? "var(--primary-light)" : "var(--on-slate-mute)" }}>
-          {nameOf(room, auction.currentActorUserId)} to act · closes {clockText(seconds)}
+          Anyone can bid · closes in {clockText(seconds)}
         </span>
       </div>
       <div className="stage-mid" style={{ flexDirection: "row", gap: 22 }}>
@@ -413,7 +417,7 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
           <div className="auction-lot">
             <span className="auction-lot-band" style={{ background: tileBand(tile)?.color, ...PATTERN_CSS[tileBand(tile)?.pattern ?? "solid"] }}>{tileBand(tile)?.code}</span>
             <span style={{ padding: 8, fontWeight: 900, textTransform: "uppercase", fontSize: 14, lineHeight: 1.1 }}>{tile.name}</span>
-            <span style={{ padding: "0 8px 8px", fontSize: 11, fontWeight: 700, color: "var(--on-slate-mute)" }}>List {money(tile.price ?? 0)}</span>
+            <span style={{ padding: "0 8px 8px", fontSize: 11, fontWeight: 700, color: "var(--ink-mute)" }}>List {money(tile.price ?? 0)}</span>
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
@@ -422,7 +426,7 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
           <span style={{ fontWeight: 700 }}>
             {auction.highBidderUserId === null ? "Opening bid " + money(minimum) : "Leader: " + nameOf(room, auction.highBidderUserId)}
           </span>
-          {myTurn ? (
+          {canBid ? (
             <>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {[10, 50, 100].map((step) => {
@@ -440,12 +444,18 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
                   <input inputMode="numeric" value={custom} placeholder={String(minimum)} onChange={(event) => setCustom(event.target.value.replace(/\D/g, ""))} />
                 </label>
                 <button type="button" className="btn btn-primary" disabled={busy || !(customAmount >= minimum && customAmount <= me.cash)} onClick={() => bid(customAmount)}>Bid</button>
-                <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act({ type: "PASS_AUCTION", payload: { auctionId: auction.auctionId } })}>Pass</button>
+                <button type="button" className="btn btn-ghost" disabled={busy} title="Optional: leave this auction so it can end early"
+                  onClick={() => act({ type: "PASS_AUCTION", payload: { auctionId: auction.auctionId } })}>Not interested</button>
               </div>
-              <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>Minimum {money(minimum)} · your cash {money(me.cash)}</span>
+              <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>Minimum {money(minimum)} · your cash {money(me.cash)} · a bid keeps at least 10s on the clock</span>
             </>
           ) : (
-            <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>Waiting for {nameOf(room, auction.currentActorUserId)}.</span>
+            <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>
+              {leading
+                ? "You're leading. It's yours when the clock runs out" + (stillIn > 1 ? ", unless someone outbids you." : ".")
+                : inAuction ? "" : "You're out of this auction."}
+              {auction.highBid === null && !inAuction ? " If nobody bids before the clock runs out, nobody gets it." : ""}
+            </span>
           )}
         </div>
       </div>
@@ -458,7 +468,7 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
             const passed = auction.passedPlayerIds.includes(userId);
             return (
               <span key={userId} className="bidder-chip" style={{ opacity: passed ? 0.5 : 1 }}>
-                <Token player={player} size={16} />{player.name}{passed ? " · passed" : userId === auction.highBidderUserId ? " · leading" : ""}
+                <Token player={player} size={16} />{player.name}{passed ? " · out" : userId === auction.highBidderUserId ? " · leading" : ""}
               </span>
             );
           })}

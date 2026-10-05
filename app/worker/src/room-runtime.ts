@@ -50,7 +50,9 @@ import {
 } from "./seats";
 import type { SqlDb } from "./transition";
 
+/** Open auction clock (owner decision 2026-10-06): 20s to open; a bid never leaves less than 10s. */
 export const AUCTION_DECISION_MS = 20_000;
+export const AUCTION_BID_MS = 10_000;
 export const DEBT_WINDOW_MS = 120_000;
 export const FINALIZATION_RETRY_MS = 60_000;
 export const MAX_SEATS = 10;
@@ -410,7 +412,7 @@ function commit(db: SqlDb, deps: RuntimeDeps, actorUserId: string, command: Game
       rng: deps.rng,
       cardCatalog: cards,
       currentTime: deps.now,
-      auctionDecisionDeadlineAt: deps.now + AUCTION_DECISION_MS,
+      auctionDecisionDeadlineAt: deps.now + (command.type === "PLACE_BID" ? AUCTION_BID_MS : AUCTION_DECISION_MS),
       debtDeadlineAt: deps.now + DEBT_WINDOW_MS,
       appliedActions: applied === undefined
         ? []
@@ -646,8 +648,8 @@ function dueTimeouts(db: SqlDb, now: number): DueTimeout[] {
     due.push({
       at: auction.decisionDeadlineAt,
       command: command("AUCTION_TIMEOUT",
-        "timeout:auction:" + auction.auctionId + ":" + auction.currentActorUserId + ":" + auction.decisionDeadlineAt,
-        { auctionId: auction.auctionId, actorUserId: auction.currentActorUserId, decisionDeadlineAt: auction.decisionDeadlineAt }),
+        "timeout:auction:" + auction.auctionId + ":" + auction.decisionDeadlineAt,
+        { auctionId: auction.auctionId, decisionDeadlineAt: auction.decisionDeadlineAt }),
     });
   }
   const debt = state.ruleState.debt;

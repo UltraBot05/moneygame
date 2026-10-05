@@ -501,8 +501,7 @@ function auctionLines(game: ProjectedGameState, board: BoardModel, names: Names,
     switch (fact.type) {
       case "STARTED": return ["Auction opened for " + lot + "."];
       case "BID": return [who + " bid " + money(fact.amount ?? 0) + "."];
-      case "PASS": return [who + " passed."];
-      case "AUTO_PASS": return [who + " ran out of time and passed."];
+      case "PASS": return [who + " is not interested."];
       case "WINNER": return [who + " won " + lot + " for " + money(fact.amount ?? 0) + "."];
       case "NO_BID": return ["No bids. " + lot + " stays with the bank."];
     }

@@ -85,7 +85,7 @@ function chaosCommand(state: GameState, random: RandomSource): BotCommand {
     COUNTER_TRADE: { tradeId: trade?.tradeId ?? "none", offered: bundle(), requested: bundle() },
     ACCEPT_TRADE: { tradeId: trade?.tradeId ?? "none" }, REJECT_TRADE: { tradeId: trade?.tradeId ?? "none" },
     CANCEL_TRADE: { tradeId: trade?.tradeId ?? "none" },
-    AUCTION_TIMEOUT: { auctionId, actorUserId: actor, decisionDeadlineAt: 0 },
+    AUCTION_TIMEOUT: { auctionId, decisionDeadlineAt: state.auction?.decisionDeadlineAt ?? 0 },
     DEBT_TIMEOUT: { resolutionId, deadlineAt: 0 },
     TURN_TIMEOUT: { turnId: state.turn?.turnId ?? "none" },
   };

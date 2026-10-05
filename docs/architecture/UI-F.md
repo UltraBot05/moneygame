@@ -62,6 +62,8 @@ is retired; only its size-agnostic layout math (`app/web/src/board/layout.ts`) r
    alert, Holding, bankruptcy, win and chat. They follow committed events only (never history
    present when the screen opened), so every player hears the same moments and nothing hidden is
    revealed. A Sound on/off toggle in the top bar is remembered per browser.
+17. **Open auction screen**: everyone still in sees the bid buttons at once, with the shared countdown
+   and an optional "Not interested"; the leader sees that the deed is theirs when the clock runs out.
 
 ## Dev preview
 

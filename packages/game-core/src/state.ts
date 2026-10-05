@@ -99,7 +99,7 @@ export interface PendingResolution {
   readonly obligation: MonetaryObligation | null;
 }
 
-export type AuctionFactType = "STARTED" | "BID" | "PASS" | "AUTO_PASS" | "WINNER" | "NO_BID";
+export type AuctionFactType = "STARTED" | "BID" | "PASS" | "WINNER" | "NO_BID";
 
 export interface AuctionFact {
   readonly type: AuctionFactType;
@@ -111,6 +111,11 @@ export interface AuctionFact {
   readonly actionId: string;
 }
 
+/**
+ * An open, timed auction (owner decision 2026-10-06): every eligible participant may bid at any
+ * time; passing ("not interested") is optional and permanent. It settles when the clock runs out,
+ * or early once nobody but the leader (or, with no bid, nobody at all) can still bid.
+ */
 export interface AuctionState {
   readonly auctionId: string;
   readonly assetId: string;
@@ -118,7 +123,6 @@ export interface AuctionState {
   readonly continuation: ResolutionContinuation;
   readonly participantOrder: readonly string[];
   readonly passedPlayerIds: readonly string[];
-  readonly currentActorUserId: string;
   readonly highBid: number | null;
   readonly highBidderUserId: string | null;
   readonly hasBid: boolean;
@@ -691,7 +695,7 @@ function parseAuctionFact(
   const type = object.type;
   if (
     type !== "STARTED" && type !== "BID" && type !== "PASS"
-    && type !== "AUTO_PASS" && type !== "WINNER" && type !== "NO_BID"
+    && type !== "WINNER" && type !== "NO_BID"
   ) {
     fail(path + ".type", "unknown auction fact");
   }
@@ -739,7 +743,7 @@ function parseAuction(
   const object = objectAt(value, path);
   exactKeys(object, [
     "auctionId", "assetId", "originatingPlayerId", "continuation", "participantOrder",
-    "passedPlayerIds", "currentActorUserId", "highBid", "highBidderUserId", "hasBid",
+    "passedPlayerIds", "highBid", "highBidderUserId", "hasBid",
     "decisionDeadlineAt", "history",
   ], path);
   if (pendingResolution?.kind !== "AUCTION" || pendingResolution.source.type !== "TILE") {
@@ -801,17 +805,8 @@ function parseAuction(
   ) {
     fail(path + ".passedPlayerIds", "must contain unique auction participants");
   }
-  const currentActorUserId = identifierAt(
-    object.currentActorUserId, path + ".currentActorUserId",
-  );
-  if (
-    !participantOrder.includes(currentActorUserId)
-    || passedPlayerIds.includes(currentActorUserId)
-  ) {
-    fail(path + ".currentActorUserId", "must be an unpassed auction participant");
-  }
-  if (pendingResolution.decisionOwnerUserId !== currentActorUserId) {
-    fail(path + ".currentActorUserId", "must own the pending auction decision");
+  if (pendingResolution.decisionOwnerUserId !== originatingPlayerId) {
+    fail(path, "an open auction stays owned by the originating player");
   }
   if (object.hasBid !== true && object.hasBid !== false) {
     fail(path + ".hasBid", "expected a boolean");
@@ -827,9 +822,6 @@ function parseAuction(
       && (!participantOrder.includes(highBidderUserId) || passedPlayerIds.includes(highBidderUserId)))
   ) {
     fail(path, "high bid fields must consistently identify an unpassed participant");
-  }
-  if (hasBid && highBidderUserId === currentActorUserId) {
-    fail(path + ".currentActorUserId", "the current actor cannot bid against their own high bid");
   }
   if (highBid !== null && highBidderUserId !== null) {
     const highBidder = players.find((player) => player.userId === highBidderUserId);
@@ -851,20 +843,12 @@ function parseAuction(
   if (history[0]?.actorUserId !== originatingPlayerId) {
     fail(path + ".history[0].actorUserId", "must identify the originating player");
   }
+  // Replay: any unpassed participant who is not already leading may bid or pass, in any order.
   const replayPassed: string[] = [];
-  let replayActor = participantOrder[0]!;
   let replayHighBid: number | null = null;
   let replayHighBidder: string | null = null;
   let previousFactVersion = history[0]!.gameVersion;
   const actionIds = new Set([history[0]!.actionId]);
-  const replayNextActor = (): string => {
-    const currentIndex = participantOrder.indexOf(replayActor);
-    for (let offset = 1; offset <= participantOrder.length; offset += 1) {
-      const candidate = participantOrder[(currentIndex + offset) % participantOrder.length]!;
-      if (!replayPassed.includes(candidate) && candidate !== replayHighBidder) return candidate;
-    }
-    return fail(path + ".history", "nonterminal history has no next actor");
-  };
   for (let index = 1; index < history.length; index += 1) {
     const fact = history[index]!;
     if (fact.gameVersion <= previousFactVersion) {
@@ -875,8 +859,9 @@ function parseAuction(
       fail(path + ".history[" + index + "].actionId", "must be unique within the auction");
     }
     actionIds.add(fact.actionId);
-    if (fact.actorUserId !== replayActor) {
-      fail(path + ".history[" + index + "].actorUserId", "must match deterministic actor order");
+    const actor = fact.actorUserId;
+    if (actor === null || !participantOrder.includes(actor) || replayPassed.includes(actor) || actor === replayHighBidder) {
+      fail(path + ".history[" + index + "].actorUserId", "must be an unpassed participant who is not leading");
     }
     if (fact.type === "BID") {
       const minimum = replayHighBid === null ? 2 : replayHighBid + 2;
@@ -884,9 +869,9 @@ function parseAuction(
         fail(path + ".history[" + index + "].amount", "does not satisfy the auction minimum");
       }
       replayHighBid = fact.amount;
-      replayHighBidder = replayActor;
-    } else if (fact.type === "PASS" || fact.type === "AUTO_PASS") {
-      replayPassed.push(replayActor);
+      replayHighBidder = actor;
+    } else if (fact.type === "PASS") {
+      replayPassed.push(actor);
     } else {
       fail(path + ".history[" + index + "].type", "terminal facts cannot remain active");
     }
@@ -899,16 +884,14 @@ function parseAuction(
     ) {
       fail(path + ".history", "terminal history must already be settled");
     }
-    replayActor = replayNextActor();
   }
   if (
-    replayActor !== currentActorUserId
-    || replayHighBid !== highBid
+    replayHighBid !== highBid
     || replayHighBidder !== highBidderUserId
     || replayPassed.length !== passedPlayerIds.length
     || replayPassed.some((playerId, index) => playerId !== passedPlayerIds[index])
   ) {
-    fail(path, "auction fields must match deterministic history replay");
+    fail(path, "auction fields must match history replay");
   }
   return {
     auctionId,
@@ -917,7 +900,6 @@ function parseAuction(
     continuation,
     participantOrder,
     passedPlayerIds,
-    currentActorUserId,
     highBid,
     highBidderUserId,
     hasBid,

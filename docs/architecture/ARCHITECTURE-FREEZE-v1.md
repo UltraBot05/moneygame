@@ -96,6 +96,10 @@ Development is limited to at most two paid purchases per eligible owner turn acr
 
 ### Auction rule policy
 
+> Superseded on 2026-10-06 by the open timed auction in section 11. The turn-order, explicit final
+> no-bid turn and per-actor auto-pass rules below no longer apply; the minimums, cash-only bids,
+> eligibility and atomic settlement still do.
+
 - The first valid bid is at least $2. Every later bid is at least the current high bid plus $2. There is no reserve.
 - Every non-bankrupt player is initially eligible, including the player who declined the purchase. Team-specific restrictions remain deferred to RULE-018.
 - Auction turns rotate deterministically in seat order, beginning with the next eligible seat after the declining player and wrapping around. A pass is permanent for that auction.
@@ -248,3 +252,12 @@ Decided by the product owner for RULE-011, 012, 016, 017, 018, and 019, followin
   by players dropping out when they are done, because the rules have no length limit.
 - **No length limit, by choice.** A table that never trades can play indefinitely; the owner accepts
   this (players resign when bored). A timed game mode is a possible later module (backlog POST-009).
+- **Open timed auction (2026-10-06).** Bidding no longer goes round the table. When a deed is
+  declined, every active player (including the decliner) may bid at any time: at least $2, then at
+  least $2 over the high bid, cash only, never above current cash, and never against their own lead.
+  The runtime supplies the clock: 20 s to open; a bid never leaves less than 10 s (it can extend the
+  clock, never cut it). "Not interested" is optional and permanent for that auction; the leader cannot
+  withdraw. The auction settles when the clock runs out (the leader pays and takes the deed, or with no
+  bid it stays with the bank), or early once only the leader (or, with no bid, nobody) is still in.
+  Reason: players should not have to answer every auction, and "if nobody bids in time, nobody gets
+  it" is simpler to read at the table.
