@@ -64,6 +64,10 @@ is retired; only its size-agnostic layout math (`app/web/src/board/layout.ts`) r
    revealed. A Sound on/off toggle in the top bar is remembered per browser.
 17. **Open auction screen**: everyone still in sees the bid buttons at once, with the shared countdown
    and an optional "Not interested"; the leader sees that the deed is theirs when the clock runs out.
+18. **Board icons** come from Phosphor (MIT, owner-approved dependency) in its duotone weight, each
+   in its own colour: airplane, train, drop, lightning, stamp (Customs), treasure chest, sealed
+   question (Surprise), gavel, gift, ticket, arrows (exchange); corners use brass (arrow, island,
+   police car, lock key on the steel-barred Holding cell). Cost: about 20 kB gzipped.
 
 ## Dev preview
 

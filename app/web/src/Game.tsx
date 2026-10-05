@@ -3,6 +3,7 @@ import type { ProjectedGameState } from "@moneygame/game-core";
 import type { RoomView } from "@moneygame/shared";
 import { computeLayout, type TilePos } from "./board/layout";
 import { ConfirmDialog, EndgameDialog, PausedOverlay, Token, TradeDialog, type TradeDraft } from "./Dialogs";
+import { Icon, ICON_COLOR, tileIcon, type IconName } from "./icons";
 import type { RoomPort, RoomSnapshot } from "./room-client";
 import { isMuted, play, setMuted, soundsFor, unlockAudio } from "./sounds";
 import {
@@ -207,19 +208,19 @@ function TileView({ tile, position, game, players, here, selected, activeHere, o
     const holding = tile.corner === "HOLDING";
     const inside = here.filter((player) => player.inHolding);
     const visiting = here.filter((player) => !player.inHolding);
-    const glyph = tile.corner === "START" ? "▶" : tile.corner === "VACATION" ? "◍" : tile.corner === "GO_TO_HOLDING" ? "⇥" : "";
+    const glyph: IconName | null = tile.corner === "START" ? "START" : tile.corner === "VACATION" ? "VACATION" : tile.corner === "GO_TO_HOLDING" ? "POLICE" : null;
     return (
       <div className={"tile corner" + highlight} data-edge="corner" style={place} aria-label={tile.name}>
         {holding ? (
           <>
             <span className="visiting-lane"><span>Visiting</span></span>
-            <span className="holding-cell"><span className="corner-name">Holding</span><Tokens list={inside} /></span>
+            <span className="holding-cell"><span className="holding-head"><Icon name="LOCK" className="holding-lock" /><span className="corner-name">Holding</span></span><Tokens list={inside} /></span>
             <Tokens list={visiting} />
           </>
         ) : (
           <>
             <span className="corner-inner">
-              <span className="corner-glyph">{glyph}</span>
+              {glyph !== null && <Icon name={glyph} className="corner-glyph" />}
               <span className="corner-name">{tile.name}</span>
               {tile.corner === "START" && <span className="corner-sub">Pass {money(200)} · Land {money(300)}</span>}
             </span>
@@ -231,6 +232,7 @@ function TileView({ tile, position, game, players, here, selected, activeHere, o
   }
   const levelCount = asset?.kind === "PROPERTY" ? asset.developmentLevel : 0;
   const band = tileBand(tile);
+  const icon = band === null || tile.kind === "property" ? null : tileIcon(tile, band.code);
   const ownable = asset !== undefined;
   const label = tile.name + (owner === undefined ? "" : ", owned by " + owner.name) + (asset?.mortgaged ? ", mortgaged" : "");
   const price = tile.price !== null ? money(tile.price) : tile.taxAmount !== null ? money(tile.taxAmount) : null;
@@ -245,7 +247,7 @@ function TileView({ tile, position, game, players, here, selected, activeHere, o
       <span className="tile-body">
         <span className="tile-name" style={{ "--fit": fitted.fit } as CSSProperties}>{fitted.text}</span>
         <span className="tile-zone">
-          {tile.kind !== "property" && band !== null && <span className="tile-glyph" style={{ color: "color-mix(in srgb, " + band.color + " 60%, #fff)" }}>{band.glyph}</span>}
+          {icon !== null && <span className="tile-glyph" style={{ color: ICON_COLOR[icon] }}><Icon name={icon} /></span>}
           <Tokens list={here} />
         </span>
       </span>

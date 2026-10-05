@@ -141,27 +141,27 @@ export function boardModel(ref: string): BoardModel {
 
 const AIRPORTS = new Set(["Heathrow", "Changi"]);
 
-/** Colour band, code and glyph per tile, from the Design TYPE_META. */
-export function tileBand(tile: TileModel): Readonly<{ color: string; code: string; pattern: Pattern; glyph: string }> | null {
+/** Colour band and code per tile, from the Design TYPE_META (icons live in icons.tsx). */
+export function tileBand(tile: TileModel): Readonly<{ color: string; code: string; pattern: Pattern }> | null {
   switch (tile.kind) {
     case "property":
-      return tile.set === null ? null : { color: tile.set.color, code: tile.set.code, pattern: tile.set.pattern, glyph: "" };
+      return tile.set === null ? null : { color: tile.set.color, code: tile.set.code, pattern: tile.set.pattern };
     case "transit":
       return AIRPORTS.has(tile.name)
-        ? { color: "#2C3540", code: "AIRPORT", pattern: "solid", glyph: "✈" }
-        : { color: "#2C3540", code: "RAILWAY", pattern: "solid", glyph: "≡" };
+        ? { color: "#2C3540", code: "AIRPORT", pattern: "solid" }
+        : { color: "#2C3540", code: "RAILWAY", pattern: "solid" };
     case "utility":
       return tile.name.includes("Water")
-        ? { color: "#55616E", code: "WATER", pattern: "solid", glyph: "≈" }
-        : { color: "#55616E", code: "POWER", pattern: "solid", glyph: "⊞" };
+        ? { color: "#55616E", code: "WATER", pattern: "solid" }
+        : { color: "#55616E", code: "POWER", pattern: "solid" };
     case "tax":
-      return { color: "#B3271A", code: "CUSTOMS", pattern: "solid", glyph: "▼" };
+      return { color: "#B3271A", code: "CUSTOMS", pattern: "solid" };
     case "card":
       return tile.deck === "treasure"
-        ? { color: "#2E7D5B", code: "TREASURE", pattern: "solid", glyph: "◈" }
-        : { color: "#C08A2E", code: "SURPRISE", pattern: "solid", glyph: "?" };
+        ? { color: "#2E7D5B", code: "TREASURE", pattern: "solid" }
+        : { color: "#C08A2E", code: "SURPRISE", pattern: "solid" };
     case "special":
-      return { color: "#7A4E9E", code: "EXCHANGE", pattern: "solid", glyph: "✦" };
+      return { color: "#7A4E9E", code: "EXCHANGE", pattern: "solid" };
     case "corner":
       return null;
   }

@@ -23,7 +23,7 @@ human balance and alpha playtests, and the public-release IP review. See
 | Wire protocol | `packages/shared`: one typed, strictly validated client/server contract (protocol v4) |
 | Server | Cloudflare Workers; one SQLite-backed Durable Object (`GameRoom`) per room with WebSocket Hibernation and a single alarm for all deadlines; an `AuthStore` Durable Object for OAuth transactions |
 | Database | Cloudflare D1: users, finalized match history, cosmetics |
-| Web app | React 19 + Vite 6, custom CSS design tokens from the Claude Design system (no component library) |
+| Web app | React 19 + Vite 6, custom CSS design tokens from the Claude Design system (no component library); board icons from Phosphor (MIT) |
 | Auth | Google OpenID Connect (code + PKCE, state, nonce); HMAC-signed session cookie; email never stored |
 | Hosting | One origin on Cloudflare: the Worker serves the built web app as static assets and handles `/api/*` and `/auth/*` |
 | Tests | Vitest (unit, integration, simulation, fuzz), Playwright (smoke on Chromium/Firefox/WebKit, live multi-browser against `wrangler dev`), ESLint, a layer-boundary checker |
