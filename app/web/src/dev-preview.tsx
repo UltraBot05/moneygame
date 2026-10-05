@@ -82,7 +82,8 @@ class LocalRoom implements RoomPort {
   /** The player the rules are waiting on. */
   private actor(): string {
     const auction = this.state.auction;
-    if (auction !== null) return auction.currentActorUserId;
+    // Open auction, hot-seat: hand the controls to the first player still in who is not leading.
+    if (auction !== null) return auction.participantOrder.find((userId) => !auction.passedPlayerIds.includes(userId) && userId !== auction.highBidderUserId) ?? auction.originatingPlayerId;
     const trade = this.state.ruleState.trades.at(-1);
     if (trade !== undefined) return trade.recipientUserId;
     return this.state.pendingResolution?.decisionOwnerUserId ?? this.state.turn?.activePlayerId ?? "p0";
@@ -121,7 +122,7 @@ class LocalRoom implements RoomPort {
     const now = Date.now();
     const actionId = "local-" + (this.sequence + 1);
     const result = applyGameplayCommand(this.state, { type, gameId: this.state.gameId, actionId, expectedGameVersion: this.state.gameVersion, payload },
-      { actorUserId: this.actor(), board, rng: this.rng, cardCatalog: cards, currentTime: now, auctionDecisionDeadlineAt: now + 20_000, debtDeadlineAt: now + 120_000 });
+      { actorUserId: this.actor(), board, rng: this.rng, cardCatalog: cards, currentTime: now, auctionDecisionDeadlineAt: now + (type === "PLACE_BID" ? 10_000 : 20_000), debtDeadlineAt: now + 120_000 });
     if (result.kind === "ACCEPTED") {
       this.state = result.state;
       this.emit(this.build(result.event));

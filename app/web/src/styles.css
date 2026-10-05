@@ -193,7 +193,8 @@ button.tile:hover { background: #2f3945; }
 }
 /* The pawn zone: below the name, so pawns never cover it. Special tiles show their icon here. */
 .tile-zone { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; }
-.tile-glyph { font-size: calc(var(--unit) * 0.3); line-height: 1; }
+.tile-glyph { display: grid; place-items: center; }
+.tile-glyph svg { width: calc(var(--unit) * 0.42); height: calc(var(--unit) * 0.42); filter: drop-shadow(0 2px 3px #00000080); }
 /* Buildings sit on the set band in place of its code. */
 .tile-dev { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: calc(var(--unit) * 0.03); }
 .tile[data-edge="left"] .tile-dev, .tile[data-edge="right"] .tile-dev { flex-direction: column; }
@@ -252,16 +253,25 @@ button.tile:hover { background: #2f3945; }
   gap: calc(var(--unit) * 0.05); padding: calc(var(--unit) * 0.06) calc(var(--unit) * 0.08) 0;
 }
 .corner-glyph {
-  display: grid; place-items: center; border: 1.5px solid var(--brass); color: var(--brass-light);
-  width: calc(var(--unit) * 0.28); height: calc(var(--unit) * 0.28); font-size: calc(var(--unit) * 0.15); flex: none;
+  flex: none; color: var(--brass-light); width: calc(var(--unit) * 0.36); height: calc(var(--unit) * 0.36);
+  filter: drop-shadow(0 2px 3px #00000080);
 }
 .corner-name { font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.1; font-size: calc(var(--unit) * 0.17); }
 .corner-sub { font-weight: 600; letter-spacing: 0.02em; color: var(--on-slate-mute); line-height: 1.2; font-size: calc(var(--unit) * 0.11); }
 .holding-cell {
   position: absolute; top: 0; right: 0; width: 72%; height: 72%;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border: 2px solid var(--brass); background: repeating-linear-gradient(90deg, var(--ink) 0 3px, var(--panel) 3px 8px);
+  /* Steel bars over a dark cell, with a brass frame. */
+  border: 2px solid var(--brass);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 7px, #8d99a6 7px 8px, #c9d3dd 8px 9px, #5f6b78 9px 10.5px, transparent 10.5px 17px),
+    linear-gradient(180deg, #232b34, #12171c);
 }
+.holding-head {
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--unit) * 0.02);
+  padding: calc(var(--unit) * 0.03) calc(var(--unit) * 0.05); background: #12171cd9;
+}
+.holding-lock { width: calc(var(--unit) * 0.2); height: calc(var(--unit) * 0.2); color: var(--brass-light); }
 .holding-cell .corner-name { color: var(--brass-light); font-size: calc(var(--unit) * 0.14); }
 .visiting-lane {
   position: absolute; left: 0; bottom: 0; top: 0; width: 28%; display: grid; place-items: center;
@@ -290,16 +300,30 @@ button.tile:hover { background: #2f3945; }
   display: flex; flex-direction: column; gap: clamp(4px, 1.2cqw, 12px); font-size: clamp(11px, 1.3cqw, 13px);
 }
 .stage-foot .label { font-size: clamp(9px, 1.1cqw, 11px); }
-.stage-dice { display: flex; gap: clamp(8px, 1.6cqw, 16px); }
+/* Room for the tilted cubes (they project wider than --die) and their shadows. */
+.stage-dice { display: flex; gap: clamp(20px, 3.8cqw, 38px); padding: clamp(6px, 1.2cqw, 12px) 0 clamp(14px, 2.4cqw, 24px); }
+/* 3D dice: a CSS cube per die, tilted so three faces show; a roll tumbles onto the result. */
 .die {
   --die: clamp(40px, 7.6cqw, 76px);
   --pip: var(--ink);
-  width: var(--die); height: var(--die); display: grid; place-items: center; background: var(--paper);
-  box-shadow: inset 0 calc(var(--die) * -0.07) 0 #d8d0bd, 0 10px 24px #00000080;
+  position: relative; width: var(--die); height: var(--die); perspective: calc(var(--die) * 5);
 }
-/* Before the first roll the dice show faint pips rather than a result. */
+.die::after {
+  content: ""; position: absolute; left: 8%; right: 8%; bottom: calc(var(--die) * -0.28); height: calc(var(--die) * 0.14);
+  border-radius: 50%; background: #000; opacity: 0.5; filter: blur(5px);
+}
+.die-cube {
+  position: absolute; inset: 0; transform-style: preserve-3d;
+  transform: rotateX(-22deg) rotateY(-26deg) var(--show);
+}
+.die.rolling { animation: mg-hop 0.95s cubic-bezier(.3,.7,.4,1); }
+.die.rolling .die-cube { animation: mg-roll3d 0.95s cubic-bezier(.2,.75,.25,1); }
+.die-face {
+  position: absolute; inset: 0; display: grid; place-items: center; background: var(--paper);
+  border-radius: 10%; backface-visibility: hidden;
+  box-shadow: inset 0 0 0 1px #d8d0bd, inset 0 0 calc(var(--die) * 0.16) #00000024;
+}
 .die.idle { --pip: #d3cab6; }
-.die.rolling { animation: mg-tumble 0.7s cubic-bezier(.3,.7,.4,1); }
 .pips {
   display: grid; grid-template-columns: repeat(3, calc(var(--die) * 0.16)); grid-template-rows: repeat(3, calc(var(--die) * 0.16));
   gap: calc(var(--die) * 0.04);
@@ -326,7 +350,7 @@ button.tile:hover { background: #2f3945; }
 .rail-roll { display: none; }
 
 .event-card {
-  width: min(300px, 90%); background: var(--paper); border: 2px solid var(--ink);
+  width: min(300px, 90%); background: var(--paper); border: 2px solid var(--ink); color: var(--ink);
   box-shadow: 0 24px 60px #00000088; display: flex; flex-direction: column;
   animation: mg-flash 0.35s ease-out;
 }
@@ -337,7 +361,7 @@ button.tile:hover { background: #2f3945; }
 
 .auction-figure { font-size: clamp(26px, 4.4cqw, 44px); font-weight: 900; line-height: 0.9; }
 .auction-lot {
-  width: 112px; flex: none; background: var(--paper); border: 2px solid var(--line-warm); display: flex; flex-direction: column;
+  width: 112px; flex: none; background: var(--paper); border: 2px solid var(--line-warm); color: var(--ink); display: flex; flex-direction: column;
 }
 .auction-lot-band { height: 26px; display: grid; place-items: center; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff; }
 .bidder-chip {
@@ -492,12 +516,13 @@ button.tile:hover { background: #2f3945; }
 
 @keyframes mg-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.55 } }
 @keyframes mg-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(calc(var(--pawn, 20px) * -0.18)) } }
-@keyframes mg-tumble {
-  0% { transform: translateY(0) rotate(0deg) }
-  25% { transform: translateY(-22px) rotate(96deg) }
-  50% { transform: translateY(0) rotate(190deg) }
-  72% { transform: translateY(-9px) rotate(268deg) }
-  100% { transform: translateY(0) rotate(360deg) }
+@keyframes mg-roll3d { from { transform: rotateX(-22deg) rotateY(-26deg) var(--spin); } }
+@keyframes mg-hop {
+  0% { transform: translateY(0) }
+  30% { transform: translateY(calc(var(--die) * -0.5)) }
+  60% { transform: translateY(0) }
+  78% { transform: translateY(calc(var(--die) * -0.12)) }
+  100% { transform: translateY(0) }
 }
 @keyframes mg-flash { 0% { opacity: 0; transform: translateY(6px) } 100% { opacity: 1; transform: translateY(0) } }
 

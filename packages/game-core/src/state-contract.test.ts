@@ -505,10 +505,11 @@ describe("CORE-011 persistent pending resolution and obligation", () => {
     if (declined.kind !== "ACCEPTED") throw new Error("decline must start auction");
     const auction = declined.state;
     expect(parseGameState(JSON.parse(JSON.stringify(auction)), standard)).toEqual(auction);
-    expect(() => assertPendingDecisionOwner(auction, auction.pendingResolution!.resolutionId, players[0]!))
+    // An open auction (2026-10-06) is not handed seat to seat: the decliner keeps the pending decision.
+    expect(() => assertPendingDecisionOwner(auction, auction.pendingResolution!.resolutionId, players[1]!))
       .toThrow(/wrong actor/);
     expect(assertPendingDecisionOwner(
-      auction, auction.pendingResolution!.resolutionId, players[1]!,
+      auction, auction.pendingResolution!.resolutionId, players[0]!,
     ).kind).toBe("AUCTION");
 
     const card = landed(standard, 9);

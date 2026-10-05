@@ -54,6 +54,20 @@ is retired; only its size-agnostic layout math (`app/web/src/board/layout.ts`) r
    all meet WCAG AA (lowest 5.3:1).
 14. **Player spotlight**: hovering or keyboard-focusing a player in the list keeps that player's
    deeds and pawn tile in full colour, outlined in their colour, and dims the rest of the board.
+15. **3D dice** are CSS cubes (no library): six faces, opposite faces summing to 7, tilted so three
+   faces show. A roll tumbles in from extra turns and lands on the server's result; reduced-motion
+   users see the result without the tumble.
+16. **Game sounds** are synthesised with Web Audio (no audio files): dice, coin (buy, rent, Start,
+   tax, mortgage), building, landmark, card, auction bid, "your turn", trade offer or fair-play
+   alert, Holding, bankruptcy, win and chat. They follow committed events only (never history
+   present when the screen opened), so every player hears the same moments and nothing hidden is
+   revealed. A Sound on/off toggle in the top bar is remembered per browser.
+17. **Open auction screen**: everyone still in sees the bid buttons at once, with the shared countdown
+   and an optional "Not interested"; the leader sees that the deed is theirs when the clock runs out.
+18. **Board icons** come from Phosphor (MIT, owner-approved dependency) in its duotone weight, each
+   in its own colour: airplane, train, drop, lightning, stamp (Customs), treasure chest, sealed
+   question (Surprise), gavel, gift, ticket, arrows (exchange); corners use brass (arrow, island,
+   police car, lock key on the steel-barred Holding cell). Cost: about 20 kB gzipped.
 
 ## Dev preview
 

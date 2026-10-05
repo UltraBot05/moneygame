@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_ROOM_SETTINGS } from "@moneygame/shared";
 import {
   admit,
+  AUCTION_BID_MS,
   AUCTION_DECISION_MS,
   DEBT_WINDOW_MS,
   disconnect,
@@ -110,7 +111,7 @@ describe("RT-007 alarm-driven deadlines", () => {
     expect(nextAlarmAt(sql)).not.toBeNull();
   });
 
-  it("hands an auction to its own 20 s clock and stops the turn clock meanwhile", () => {
+  it("runs an open auction on its own clock: 20 s to open, a late bid keeps 10 s, and the clock settles it", () => {
     const { sql } = startedRoom();
     // 2+4 from START lands on MA-1 (tile 6), which is unowned.
     handleCommand(sql, HOST.userId, command(sql, "ROLL_DICE", {}, "r1"), deps(T0, [2, 4]));
@@ -119,8 +120,16 @@ describe("RT-007 alarm-driven deadlines", () => {
     handleCommand(sql, HOST.userId, command(sql, "DECLINE_PROPERTY", { resolutionId: buying.pendingResolution?.resolutionId }, "d1"), deps(T0 + 5));
     expect(nextAlarmAt(sql)).toBe(T0 + 5 + AUCTION_DECISION_MS);
     expect(roomView(sql, T0 + 5)?.turnDeadlineAt).toBeNull();
-    const passes = runDueTimeouts(sql, deps(T0 + 5 + AUCTION_DECISION_MS));
-    expect(passes[0]).toMatchObject({ type: "AUCTION_UPDATED", action: "AUTO_PASS" });
+    const auctionId = game(sql).auction?.auctionId;
+    // An early bid leaves the opening clock alone.
+    handleCommand(sql, BEN.userId, command(sql, "PLACE_BID", { auctionId, amount: 20 }, "b1"), deps(T0 + 15));
+    expect(nextAlarmAt(sql)).toBe(T0 + 5 + AUCTION_DECISION_MS);
+    // A late bid (here by the decliner) always leaves the bid window.
+    handleCommand(sql, HOST.userId, command(sql, "PLACE_BID", { auctionId, amount: 22 }, "b2"), deps(T0 + 18_000));
+    expect(nextAlarmAt(sql)).toBe(T0 + 18_000 + AUCTION_BID_MS);
+    const closed = runDueTimeouts(sql, deps(T0 + 18_000 + AUCTION_BID_MS));
+    expect(closed[0]).toMatchObject({ type: "AUCTION_UPDATED", action: "TIMEOUT", facts: [{ type: "WINNER", actorUserId: HOST.userId, amount: 22 }] });
+    expect(game(sql).auction).toBeNull();
   });
 
   it("forces bankruptcy when the persisted debt deadline passes", () => {

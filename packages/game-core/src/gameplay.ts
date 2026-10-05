@@ -127,7 +127,7 @@ export type GameplayEvent =
     }
   | {
       readonly type: "AUCTION_UPDATED";
-      readonly action: "BID" | "PASS" | "AUTO_PASS";
+      readonly action: "BID" | "PASS" | "TIMEOUT";
       readonly auctionId: string;
       readonly assetId: string;
       readonly auction: AuctionState | null;
@@ -226,7 +226,9 @@ export type GameplayRejectionReason =
   | "NOT_MORTGAGED"
   | "SET_HAS_DEVELOPMENT"
   | "AUCTION_NOT_ACTIVE"
-  | "NOT_AUCTION_ACTOR"
+  | "NOT_AUCTION_PARTICIPANT"
+  | "ALREADY_HIGH_BIDDER"
+  | "HIGH_BIDDER_CANNOT_PASS"
   | "BID_TOO_LOW"
   | "BID_EXCEEDS_CASH"
   | "AUCTION_DEADLINE_NOT_EXPIRED"
@@ -1028,6 +1030,7 @@ function declineProperty(state: GameState, env: RuleEnv): GameplayCommandResult 
   if (asset === undefined || asset.ownerUserId !== null) {
     return rejected(state, asset === undefined ? "RESOLUTION_NOT_PENDING" : "ASSET_ALREADY_OWNED");
   }
+  // The runtime supplies the opening deadline (the whole auction clock).
   const deadline = authoritativeInteger(
     env.context.auctionDecisionDeadlineAt, "context.auctionDecisionDeadlineAt",
   );
@@ -1037,7 +1040,6 @@ function declineProperty(state: GameState, env: RuleEnv): GameplayCommandResult 
     { length: eligiblePlayers.length },
     (_, offset) => eligiblePlayers[(decliningIndex + offset + 1) % eligiblePlayers.length]!.userId,
   );
-  const currentActorUserId = participantOrder[0]!;
   const fact = auctionFact(
     "STARTED", pending.resolutionId, asset.assetId, env.actorUserId, null,
     env.nextGameVersion, env.command.actionId,
@@ -1049,7 +1051,6 @@ function declineProperty(state: GameState, env: RuleEnv): GameplayCommandResult 
     continuation: pending.continuation,
     participantOrder,
     passedPlayerIds: [],
-    currentActorUserId,
     highBid: null,
     highBidderUserId: null,
     hasBid: false,
@@ -1057,11 +1058,7 @@ function declineProperty(state: GameState, env: RuleEnv): GameplayCommandResult 
     history: [fact],
   };
   const nextState = acceptedState(state, env, {
-    pendingResolution: {
-      ...pending,
-      kind: "AUCTION",
-      decisionOwnerUserId: currentActorUserId,
-    },
+    pendingResolution: { ...pending, kind: "AUCTION" },
     auction,
   });
   return accepted(nextState, {
@@ -1099,28 +1096,29 @@ function currentAuction(
   return { auction: state.auction, pending: state.pendingResolution };
 }
 
-function nextAuctionActor(
+/** An unpassed participant may bid or pass; the current leader may do neither. */
+function auctionActorRejection(
   auction: AuctionState,
-  passedPlayerIds: readonly string[],
-  highBidderUserId: string | null,
-): string {
-  const currentIndex = auction.participantOrder.indexOf(auction.currentActorUserId);
-  for (let offset = 1; offset <= auction.participantOrder.length; offset += 1) {
-    const candidate = auction.participantOrder[
-      (currentIndex + offset) % auction.participantOrder.length
-    ]!;
-    if (!passedPlayerIds.includes(candidate) && candidate !== highBidderUserId) return candidate;
+  actorUserId: string,
+  leaderReason: GameplayRejectionReason,
+): GameplayRejectionReason | null {
+  if (!auction.participantOrder.includes(actorUserId) || auction.passedPlayerIds.includes(actorUserId)) {
+    return "NOT_AUCTION_PARTICIPANT";
   }
-  throw new RangeError("continuing auction has no next actor");
+  return auction.highBidderUserId === actorUserId ? leaderReason : null;
 }
 
+/**
+ * Settles the auction when its clock has run out, or early once nobody but the leader (or, with
+ * no bid, nobody) can still bid; otherwise keeps it open with the changed state.
+ */
 function auctionTransition(
   state: GameState,
   env: RuleEnv,
-  pending: PendingResolution,
   changedAuction: AuctionState,
-  action: "BID" | "PASS" | "AUTO_PASS",
+  action: "BID" | "PASS" | "TIMEOUT",
 ): GameplayCommandResult {
+  const timedOut = action === "TIMEOUT";
   const remaining = changedAuction.participantOrder.filter(
     (playerId) => !changedAuction.passedPlayerIds.includes(playerId),
   );
@@ -1129,19 +1127,24 @@ function auctionTransition(
   );
   const asset = state.assets[assetIndex];
   if (asset === undefined || asset.ownerUserId !== null) return rejected(state, "AUCTION_NOT_ACTIVE");
-  const updated = (nextState: GameState, facts: readonly AuctionFact[]) => accepted(nextState, {
+  // A timeout adds only its terminal fact; a bid or pass also reports itself.
+  const facts = (final: AuctionFact | null) => Object.freeze([
+    ...(timedOut ? [] : [changedAuction.history.at(-1)!]),
+    ...(final === null ? [] : [final]),
+  ]);
+  const updated = (nextState: GameState, final: AuctionFact | null) => accepted(nextState, {
     type: "AUCTION_UPDATED",
     action,
     auctionId: changedAuction.auctionId,
     assetId: changedAuction.assetId,
     auction: nextState.auction,
-    facts: Object.freeze(facts),
+    facts: facts(final),
   });
 
-  if (changedAuction.hasBid && remaining.length === 1) {
+  if (changedAuction.hasBid && (timedOut || remaining.length === 1)) {
     const winnerUserId = changedAuction.highBidderUserId;
     const finalPrice = changedAuction.highBid;
-    if (winnerUserId === null || finalPrice === null || remaining[0] !== winnerUserId) {
+    if (winnerUserId === null || finalPrice === null || !remaining.includes(winnerUserId)) {
       throw new RangeError("terminal auction winner is inconsistent");
     }
     const winnerIndex = state.players.findIndex((player) => player.userId === winnerUserId);
@@ -1163,34 +1166,19 @@ function auctionTransition(
       pendingResolution: null,
       auction: null,
     });
-    return updated(nextState, [changedAuction.history.at(-1)!, finalFact]);
+    return updated(nextState, finalFact);
   }
 
-  if (!changedAuction.hasBid && remaining.length === 0) {
+  if (!changedAuction.hasBid && (timedOut || remaining.length === 0)) {
     const finalFact = auctionFact(
       "NO_BID", changedAuction.auctionId, changedAuction.assetId, null, null,
       env.nextGameVersion, env.command.actionId,
     );
     const nextState = acceptedState(state, env, { pendingResolution: null, auction: null });
-    return updated(nextState, [changedAuction.history.at(-1)!, finalFact]);
+    return updated(nextState, finalFact);
   }
 
-  const currentActorUserId = nextAuctionActor(
-    changedAuction,
-    changedAuction.passedPlayerIds,
-    changedAuction.highBidderUserId,
-  );
-  const nextState = acceptedState(state, env, {
-    pendingResolution: { ...pending, decisionOwnerUserId: currentActorUserId },
-    auction: {
-      ...changedAuction,
-      currentActorUserId,
-      decisionDeadlineAt: authoritativeInteger(
-        env.context.auctionDecisionDeadlineAt, "context.auctionDecisionDeadlineAt",
-      ),
-    },
-  });
-  return updated(nextState, [nextState.auction!.history.at(-1)!]);
+  return updated(acceptedState(state, env, { auction: changedAuction }), null);
 }
 
 function placeBid(state: GameState, env: RuleEnv): GameplayCommandResult {
@@ -1202,8 +1190,9 @@ function placeBid(state: GameState, env: RuleEnv): GameplayCommandResult {
   const amount = payload.amount as number;
   const active = currentAuction(state, auctionId);
   if (active === null) return rejected(state, "AUCTION_NOT_ACTIVE");
-  const { auction, pending } = active;
-  if (auction.currentActorUserId !== env.actorUserId) return rejected(state, "NOT_AUCTION_ACTOR");
+  const { auction } = active;
+  const refusal = auctionActorRejection(auction, env.actorUserId, "ALREADY_HIGH_BIDDER");
+  if (refusal !== null) return rejected(state, refusal);
   const minimum = auction.highBid === null ? 2 : auction.highBid + 2;
   if (!Number.isSafeInteger(minimum)) throw new RangeError("auction minimum exceeds safe integer range");
   if (amount < minimum) return rejected(state, "BID_TOO_LOW");
@@ -1214,77 +1203,57 @@ function placeBid(state: GameState, env: RuleEnv): GameplayCommandResult {
     "BID", auction.auctionId, auction.assetId, env.actorUserId, amount,
     env.nextGameVersion, env.command.actionId,
   );
-  return auctionTransition(state, env, pending, {
+  // A bid never leaves less than the runtime's bid window on the clock (it may extend, never cut).
+  const bidDeadline = authoritativeInteger(
+    env.context.auctionDecisionDeadlineAt, "context.auctionDecisionDeadlineAt",
+  );
+  return auctionTransition(state, env, {
     ...auction,
     hasBid: true,
     highBid: amount,
     highBidderUserId: env.actorUserId,
+    decisionDeadlineAt: Math.max(auction.decisionDeadlineAt, bidDeadline),
     history: [...auction.history, fact],
   }, "BID");
 }
 
-function passAuction(state: GameState, env: RuleEnv, autoPass: boolean): GameplayCommandResult {
-  const keys = autoPass
-    ? ["auctionId", "actorUserId", "decisionDeadlineAt"]
-    : ["auctionId"];
-  const payload = payloadObject(env.command, keys);
+/** "Not interested": optional and permanent for this auction. The leader cannot withdraw. */
+function passAuction(state: GameState, env: RuleEnv): GameplayCommandResult {
+  const payload = payloadObject(env.command, ["auctionId"]);
   const auctionId = payloadIdentifier(payload.auctionId, "payload.auctionId");
   const active = currentAuction(state, auctionId);
   if (active === null) return rejected(state, "AUCTION_NOT_ACTIVE");
-  const { auction, pending } = active;
-  if (autoPass) {
-    const expectedActorUserId = payloadIdentifier(
-      payload.actorUserId, "payload.actorUserId",
-    );
-    const expectedDeadline = authoritativeInteger(
-      payload.decisionDeadlineAt, "payload.decisionDeadlineAt",
-    );
-    if (
-      expectedActorUserId !== auction.currentActorUserId
-      || expectedDeadline !== auction.decisionDeadlineAt
-    ) {
-      return rejected(state, "STALE_AUCTION_TIMEOUT");
-    }
-  } else if (auction.currentActorUserId !== env.actorUserId) {
-    return rejected(state, "NOT_AUCTION_ACTOR");
-  }
-  const passingPlayerId = auction.currentActorUserId;
+  const { auction } = active;
+  const refusal = auctionActorRejection(auction, env.actorUserId, "HIGH_BIDDER_CANNOT_PASS");
+  if (refusal !== null) return rejected(state, refusal);
   const fact = auctionFact(
-    autoPass ? "AUTO_PASS" : "PASS",
-    auction.auctionId,
-    auction.assetId,
-    passingPlayerId,
-    null,
-    env.nextGameVersion,
-    env.command.actionId,
+    "PASS", auction.auctionId, auction.assetId, env.actorUserId, null,
+    env.nextGameVersion, env.command.actionId,
   );
-  return auctionTransition(state, env, pending, {
+  return auctionTransition(state, env, {
     ...auction,
-    passedPlayerIds: [...auction.passedPlayerIds, passingPlayerId],
+    passedPlayerIds: [...auction.passedPlayerIds, env.actorUserId],
     history: [...auction.history, fact],
-  }, autoPass ? "AUTO_PASS" : "PASS");
+  }, "PASS");
 }
 
+/** The runtime closes the auction at its deadline: the leader wins, or with no bid nobody does. */
 function timeoutAuction(state: GameState, env: RuleEnv): GameplayCommandResult {
   const now = authoritativeInteger(env.context.currentTime, "context.currentTime");
-  const payload = payloadObject(env.command, ["auctionId", "actorUserId", "decisionDeadlineAt"]);
+  const payload = payloadObject(env.command, ["auctionId", "decisionDeadlineAt"]);
   const auctionId = payloadIdentifier(payload.auctionId, "payload.auctionId");
   const active = currentAuction(state, auctionId);
   if (active === null) return rejected(state, "AUCTION_NOT_ACTIVE");
-  const expectedActorUserId = payloadIdentifier(payload.actorUserId, "payload.actorUserId");
   const expectedDeadline = authoritativeInteger(
     payload.decisionDeadlineAt, "payload.decisionDeadlineAt",
   );
-  if (
-    expectedActorUserId !== active.auction.currentActorUserId
-    || expectedDeadline !== active.auction.decisionDeadlineAt
-  ) {
+  if (expectedDeadline !== active.auction.decisionDeadlineAt) {
     return rejected(state, "STALE_AUCTION_TIMEOUT");
   }
   if (now < active.auction.decisionDeadlineAt) {
     return rejected(state, "AUCTION_DEADLINE_NOT_EXPIRED");
   }
-  return passAuction(state, env, true);
+  return auctionTransition(state, env, active.auction, "TIMEOUT");
 }
 
 /**
@@ -2009,7 +1978,7 @@ export function applyGameplayCommand(
     case "BUY_PROPERTY": return buyProperty(state, env);
     case "DECLINE_PROPERTY": return declineProperty(state, env);
     case "PLACE_BID": return placeBid(state, env);
-    case "PASS_AUCTION": return passAuction(state, env, false);
+    case "PASS_AUCTION": return passAuction(state, env);
     case "AUCTION_TIMEOUT": return timeoutAuction(state, env);
     case "BUILD": return build(state, env);
     case "SELL_DEVELOPMENT": return sellDevelopment(state, env);

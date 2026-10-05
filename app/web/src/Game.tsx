@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ProjectedGameState } from "@moneygame/game-core";
 import type { RoomView } from "@moneygame/shared";
 import { computeLayout, type TilePos } from "./board/layout";
 import { ConfirmDialog, EndgameDialog, PausedOverlay, Token, TradeDialog, type TradeDraft } from "./Dialogs";
+import { Icon, ICON_COLOR, tileIcon, type IconName } from "./icons";
 import type { RoomPort, RoomSnapshot } from "./room-client";
+import { isMuted, play, setMuted, soundsFor, unlockAudio } from "./sounds";
 import {
   boardModel,
   deedModel,
@@ -61,12 +63,33 @@ const PIP_CELLS: Readonly<Record<number, readonly number[]>> = {
   1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
 };
 
-function Die({ face, rolling }: { face: number | null; rolling: boolean }) {
-  const cells = PIP_CELLS[face ?? 1] ?? [];
+/**
+ * A CSS 3D die: six faces on a cube (opposite faces sum to 7), each with its placement and the
+ * cube rotation [x, y] that turns it to the front. A roll tumbles in from extra turns and lands on
+ * the server's number; the result is never decided here.
+ */
+const FACES: readonly (readonly [value: number, place: string, x: number, y: number])[] = [
+  [1, "rotateY(0deg)", 0, 0], [6, "rotateY(180deg)", 0, 180], [3, "rotateY(90deg)", 0, -90],
+  [4, "rotateY(-90deg)", 0, 90], [2, "rotateX(90deg)", -90, 0], [5, "rotateX(-90deg)", 90, 0],
+];
+
+function Die({ face, rolling, spin = 1 }: { face: number | null; rolling: boolean; spin?: 1 | -1 }) {
+  const [, , x, y] = FACES.find(([value]) => value === (face ?? 1)) ?? FACES[0] as (typeof FACES)[number];
+  // Same function list in both, so the browser interpolates angles (whole extra turns) rather than matrices.
+  const cube = {
+    "--show": "rotateX(" + x + "deg) rotateY(" + y + "deg) rotateZ(0deg)",
+    "--spin": "rotateX(" + (x + 720 * spin) + "deg) rotateY(" + (y + 360 * spin) + "deg) rotateZ(" + 180 * spin + "deg)",
+  } as CSSProperties;
   return (
-    <span className={"die" + (rolling ? " rolling" : "") + (face === null ? " idle" : "")} aria-label={face === null ? "die" : "die showing " + face}>
-      <span className="pips">
-        {Array.from({ length: 9 }, (_unused, cell) => <i key={cell} style={{ background: cells.includes(cell) ? "var(--pip)" : "transparent" }} />)}
+    <span className={"die" + (rolling ? " rolling" : "") + (face === null ? " idle" : "")} role="img" aria-label={face === null ? "die" : "die showing " + face}>
+      <span className="die-cube" style={cube}>
+        {FACES.map(([value, place]) => (
+          <span key={value} className="die-face" style={{ transform: place + " translateZ(calc(var(--die) / 2))" }}>
+            <span className="pips">
+              {Array.from({ length: 9 }, (_unused, cell) => <i key={cell} style={{ background: PIP_CELLS[value]?.includes(cell) ? "var(--pip)" : "transparent" }} />)}
+            </span>
+          </span>
+        ))}
       </span>
     </span>
   );
@@ -185,19 +208,19 @@ function TileView({ tile, position, game, players, here, selected, activeHere, o
     const holding = tile.corner === "HOLDING";
     const inside = here.filter((player) => player.inHolding);
     const visiting = here.filter((player) => !player.inHolding);
-    const glyph = tile.corner === "START" ? "▶" : tile.corner === "VACATION" ? "◍" : tile.corner === "GO_TO_HOLDING" ? "⇥" : "";
+    const glyph: IconName | null = tile.corner === "START" ? "START" : tile.corner === "VACATION" ? "VACATION" : tile.corner === "GO_TO_HOLDING" ? "POLICE" : null;
     return (
       <div className={"tile corner" + highlight} data-edge="corner" style={place} aria-label={tile.name}>
         {holding ? (
           <>
             <span className="visiting-lane"><span>Visiting</span></span>
-            <span className="holding-cell"><span className="corner-name">Holding</span><Tokens list={inside} /></span>
+            <span className="holding-cell"><span className="holding-head"><Icon name="LOCK" className="holding-lock" /><span className="corner-name">Holding</span></span><Tokens list={inside} /></span>
             <Tokens list={visiting} />
           </>
         ) : (
           <>
             <span className="corner-inner">
-              <span className="corner-glyph">{glyph}</span>
+              {glyph !== null && <Icon name={glyph} className="corner-glyph" />}
               <span className="corner-name">{tile.name}</span>
               {tile.corner === "START" && <span className="corner-sub">Pass {money(200)} · Land {money(300)}</span>}
             </span>
@@ -209,6 +232,7 @@ function TileView({ tile, position, game, players, here, selected, activeHere, o
   }
   const levelCount = asset?.kind === "PROPERTY" ? asset.developmentLevel : 0;
   const band = tileBand(tile);
+  const icon = band === null || tile.kind === "property" ? null : tileIcon(tile, band.code);
   const ownable = asset !== undefined;
   const label = tile.name + (owner === undefined ? "" : ", owned by " + owner.name) + (asset?.mortgaged ? ", mortgaged" : "");
   const price = tile.price !== null ? money(tile.price) : tile.taxAmount !== null ? money(tile.taxAmount) : null;
@@ -223,7 +247,7 @@ function TileView({ tile, position, game, players, here, selected, activeHere, o
       <span className="tile-body">
         <span className="tile-name" style={{ "--fit": fitted.fit } as CSSProperties}>{fitted.text}</span>
         <span className="tile-zone">
-          {tile.kind !== "property" && band !== null && <span className="tile-glyph" style={{ color: "color-mix(in srgb, " + band.color + " 60%, #fff)" }}>{band.glyph}</span>}
+          {icon !== null && <span className="tile-glyph" style={{ color: ICON_COLOR[icon] }}><Icon name={icon} /></span>}
           <Tokens list={here} />
         </span>
       </span>
@@ -335,7 +359,7 @@ function CenterStage(props: StageProps) {
         <span className="label" style={{ color: turn.isMine ? "var(--primary-light)" : "var(--on-slate-mute)" }}>{turn.kicker}</span>
         <div className="stage-dice">
           <Die key={"a" + (roll?.id ?? 0)} face={roll?.dice[0] ?? null} rolling={roll !== null} />
-          <Die key={"b" + (roll?.id ?? 0)} face={roll?.dice[1] ?? null} rolling={roll !== null} />
+          <Die key={"b" + (roll?.id ?? 0)} face={roll?.dice[1] ?? null} rolling={roll !== null} spin={-1} />
         </div>
         {roll !== null && (
           <span className="total-chip">
@@ -373,7 +397,11 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
   const tile = asset === undefined ? undefined : board.tiles[asset.tileIndex];
   const me = game.players.find((player) => player.userId === viewerUserId);
   const minimum = auction.highBid === null ? 2 : auction.highBid + 2;
-  const myTurn = auction.currentActorUserId === viewerUserId && me !== undefined;
+  // Open auction: anyone still in may bid at any time; the leader waits for the clock.
+  const inAuction = me?.status === "ACTIVE" && auction.participantOrder.includes(viewerUserId) && !auction.passedPlayerIds.includes(viewerUserId);
+  const leading = auction.highBidderUserId === viewerUserId;
+  const canBid = inAuction && !leading && me !== undefined;
+  const stillIn = auction.participantOrder.filter((userId) => !auction.passedPlayerIds.includes(userId)).length;
   const seconds = secondsLeft(auction.decisionDeadlineAt, now, snapshot.clockOffset);
   const bid = (amount: number) => act({ type: "PLACE_BID", payload: { auctionId: auction.auctionId, amount } });
   const base = auction.highBid ?? 0;
@@ -383,7 +411,7 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
       <div className="stage-head">
         <span className="label" style={{ color: "var(--primary-light)" }}>Auction live</span>
         <span className="label" style={{ color: seconds !== null && seconds <= 5 ? "var(--primary-light)" : "var(--on-slate-mute)" }}>
-          {nameOf(room, auction.currentActorUserId)} to act · closes {clockText(seconds)}
+          Anyone can bid · closes in {clockText(seconds)}
         </span>
       </div>
       <div className="stage-mid" style={{ flexDirection: "row", gap: 22 }}>
@@ -391,7 +419,7 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
           <div className="auction-lot">
             <span className="auction-lot-band" style={{ background: tileBand(tile)?.color, ...PATTERN_CSS[tileBand(tile)?.pattern ?? "solid"] }}>{tileBand(tile)?.code}</span>
             <span style={{ padding: 8, fontWeight: 900, textTransform: "uppercase", fontSize: 14, lineHeight: 1.1 }}>{tile.name}</span>
-            <span style={{ padding: "0 8px 8px", fontSize: 11, fontWeight: 700, color: "var(--on-slate-mute)" }}>List {money(tile.price ?? 0)}</span>
+            <span style={{ padding: "0 8px 8px", fontSize: 11, fontWeight: 700, color: "var(--ink-mute)" }}>List {money(tile.price ?? 0)}</span>
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
@@ -400,7 +428,7 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
           <span style={{ fontWeight: 700 }}>
             {auction.highBidderUserId === null ? "Opening bid " + money(minimum) : "Leader: " + nameOf(room, auction.highBidderUserId)}
           </span>
-          {myTurn ? (
+          {canBid ? (
             <>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {[10, 50, 100].map((step) => {
@@ -418,12 +446,18 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
                   <input inputMode="numeric" value={custom} placeholder={String(minimum)} onChange={(event) => setCustom(event.target.value.replace(/\D/g, ""))} />
                 </label>
                 <button type="button" className="btn btn-primary" disabled={busy || !(customAmount >= minimum && customAmount <= me.cash)} onClick={() => bid(customAmount)}>Bid</button>
-                <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act({ type: "PASS_AUCTION", payload: { auctionId: auction.auctionId } })}>Pass</button>
+                <button type="button" className="btn btn-ghost" disabled={busy} title="Optional: leave this auction so it can end early"
+                  onClick={() => act({ type: "PASS_AUCTION", payload: { auctionId: auction.auctionId } })}>Not interested</button>
               </div>
-              <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>Minimum {money(minimum)} · your cash {money(me.cash)}</span>
+              <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>Minimum {money(minimum)} · your cash {money(me.cash)} · a bid keeps at least 10s on the clock</span>
             </>
           ) : (
-            <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>Waiting for {nameOf(room, auction.currentActorUserId)}.</span>
+            <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>
+              {leading
+                ? "You're leading. It's yours when the clock runs out" + (stillIn > 1 ? ", unless someone outbids you." : ".")
+                : inAuction ? "" : "You're out of this auction."}
+              {auction.highBid === null && !inAuction ? " If nobody bids before the clock runs out, nobody gets it." : ""}
+            </span>
           )}
         </div>
       </div>
@@ -436,7 +470,7 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
             const passed = auction.passedPlayerIds.includes(userId);
             return (
               <span key={userId} className="bidder-chip" style={{ opacity: passed ? 0.5 : 1 }}>
-                <Token player={player} size={16} />{player.name}{passed ? " · passed" : userId === auction.highBidderUserId ? " · leading" : ""}
+                <Token player={player} size={16} />{player.name}{passed ? " · out" : userId === auction.highBidderUserId ? " · leading" : ""}
               </span>
             );
           })}
@@ -748,6 +782,42 @@ export function TopBar({ room, boardLabel, center, right }: { room: RoomView; bo
   );
 }
 
+/**
+ * Plays sounds for events and chat that arrive while the screen is open (never for history that
+ * was already there when it mounted), and unlocks audio on the first click or key press.
+ */
+function useGameSounds(snapshot: RoomSnapshot, viewerUserId: string | undefined): void {
+  const seen = useRef<{ event: number; chat: number } | null>(null);
+  useEffect(() => {
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, []);
+  useEffect(() => {
+    const latest = { event: snapshot.events.at(-1)?.id ?? 0, chat: snapshot.chat.at(-1)?.id ?? 0 };
+    const before = seen.current;
+    seen.current = latest;
+    if (before === null || viewerUserId === undefined) return;
+    play([
+      ...snapshot.events.filter((entry) => entry.id > before.event).flatMap((entry) => soundsFor(entry.event, entry.game, viewerUserId)),
+      ...(snapshot.chat.some((message) => message.id > before.chat && message.userId !== viewerUserId) ? ["chat" as const] : []),
+    ]);
+  }, [snapshot.events, snapshot.chat, viewerUserId]);
+}
+
+function SoundToggle() {
+  const [muted, setState] = useState(isMuted);
+  return (
+    <button type="button" className="btn btn-slate" style={{ padding: "6px 10px" }} aria-pressed={!muted}
+      onClick={() => { setMuted(!muted); setState(!muted); }}>
+      {muted ? "Sound off" : "Sound on"}
+    </button>
+  );
+}
+
 export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; client: RoomPort }) {
   const { room, game, you } = snapshot;
   const [selected, setSelected] = useState<number | null>(null);
@@ -756,6 +826,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
   const [confirmResign, setConfirmResign] = useState(false);
   const [spotlight, setSpotlight] = useState<string | null>(null);
   const now = useNow();
+  useGameSounds(snapshot, you?.userId);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -795,6 +866,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
               {room.paused ? "Resume" : "Pause"}
             </button>
           )}
+          <SoundToggle />
           <span className="diag" title="Game version and state fingerprint (support diagnostics)">v{game.gameVersion} · {snapshot.stateHash ?? ""}</span>
         </>}
       />
