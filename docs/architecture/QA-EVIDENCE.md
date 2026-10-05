@@ -38,3 +38,21 @@ SPIKE-008 bands at 250 seeds.
 QA-001 status: convergence through a long 10-browser match is shown and a complete match is
 shown with 4 browsers, but a *complete* 10-browser match is not yet recorded. Close it with the
 GRAND-005 human session at 10 players (or a longer unattended run).
+
+## Seat fairness (2026-10-06)
+
+`pnpm simulate:seats` (500 bot games per setup, the production rules and bots) records who wins by
+seat, seat 1 moving first:
+
+| Setup | Seat 1 | Seat 2 | Last seat | Fair share |
+| --- | --- | --- | --- | --- |
+| Standard, 4 players | 32.8% | 23.0% | 20.4% | 25% |
+| Standard, 6 players | 26.8% | 23.0% | 8.4% | 16.7% |
+| Grand, 8 players | 27.2% | 22.6% | 2.4% | 12.5% |
+| Grand, 10 players | 27.4% | 20.0% | 0.6% | 10% |
+
+Moving early is a large edge for these bots (they buy everything they can afford, so the first
+laps decide the land). Before this the host always took seat 1. Decision: the runtime picks a
+random first player for every match (the order around the table is kept), so each player's chance
+of the edge is equal; starting cash stays uniform (owner decision, ARCHITECTURE-FREEZE section 11).
+How large the edge is with human players is a question for the GRAND-005 / QA-015 playtests.

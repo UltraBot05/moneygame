@@ -30,7 +30,7 @@ function faultyRoom() {
     admit(sql, user, T0);
     handleRoomAction(sql, user.userId, { kind: "SET_READY", ready: true }, deps(T0));
   }
-  handleRoomAction(sql, HOST.userId, { kind: "START" }, deps(T0));
+  handleRoomAction(sql, HOST.userId, { kind: "START" }, deps(T0, [1])); // host moves first
   return { raw, sql, failNext: (pattern: RegExp) => { failOn = pattern; } };
 }
 

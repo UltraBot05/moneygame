@@ -16,6 +16,7 @@ import {
   GameStateValidationError,
   parseGameState,
   projectGameState,
+  randomInteger,
   SYSTEM_COMMAND_TYPES,
   validStartingCash,
   type GameCommand,
@@ -570,12 +571,16 @@ function startGame(db: SqlDb, current: RoomRow, deps: RuntimeDeps): RoomOutcome 
   const settings = settingsOf(current);
   const { board, cards } = canonicalBoard(settings.boardRef);
   const gameId = deps.newGameId();
+  // Random first player (owner decision 2026-10-06): the seats rotate by a random offset, so the
+  // host does not always move first; the order around the table is unchanged.
+  const first = randomInteger(deps.rng, 0, seated.length);
+  const order = [...seated.slice(first), ...seated.slice(0, first)];
   let initial: GameState;
   try {
     initial = createInitialGameState({
       gameId,
       board,
-      playerIds: seated.map((row) => row.user_id),
+      playerIds: order.map((row) => row.user_id),
       startingCash: settings.startingCash,
       matchMode: settings.matchMode,
       teams: settings.teams,

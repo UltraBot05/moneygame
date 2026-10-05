@@ -258,7 +258,7 @@ export function playerModels(game: ProjectedGameState, room: RoomView, board: Bo
       userId: player.userId,
       name,
       initials: initials(name),
-      color: playerColor(player.seatIndex),
+      color: playerColor(member?.seatIndex ?? player.seatIndex),
       seatIndex: player.seatIndex,
       cash: player.cash,
       netWorth: player.cash + owned.reduce((sum, asset) => sum + assetValue(board, asset), 0),
