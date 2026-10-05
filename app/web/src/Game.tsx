@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ProjectedGameState } from "@moneygame/game-core";
 import type { RoomView } from "@moneygame/shared";
 import { computeLayout, type TilePos } from "./board/layout";
 import { ConfirmDialog, EndgameDialog, PausedOverlay, Token, TradeDialog, type TradeDraft } from "./Dialogs";
 import type { RoomPort, RoomSnapshot } from "./room-client";
+import { isMuted, play, setMuted, soundsFor, unlockAudio } from "./sounds";
 import {
   boardModel,
   deedModel,
@@ -769,6 +770,42 @@ export function TopBar({ room, boardLabel, center, right }: { room: RoomView; bo
   );
 }
 
+/**
+ * Plays sounds for events and chat that arrive while the screen is open (never for history that
+ * was already there when it mounted), and unlocks audio on the first click or key press.
+ */
+function useGameSounds(snapshot: RoomSnapshot, viewerUserId: string | undefined): void {
+  const seen = useRef<{ event: number; chat: number } | null>(null);
+  useEffect(() => {
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, []);
+  useEffect(() => {
+    const latest = { event: snapshot.events.at(-1)?.id ?? 0, chat: snapshot.chat.at(-1)?.id ?? 0 };
+    const before = seen.current;
+    seen.current = latest;
+    if (before === null || viewerUserId === undefined) return;
+    play([
+      ...snapshot.events.filter((entry) => entry.id > before.event).flatMap((entry) => soundsFor(entry.event, entry.game, viewerUserId)),
+      ...(snapshot.chat.some((message) => message.id > before.chat && message.userId !== viewerUserId) ? ["chat" as const] : []),
+    ]);
+  }, [snapshot.events, snapshot.chat, viewerUserId]);
+}
+
+function SoundToggle() {
+  const [muted, setState] = useState(isMuted);
+  return (
+    <button type="button" className="btn btn-slate" style={{ padding: "6px 10px" }} aria-pressed={!muted}
+      onClick={() => { setMuted(!muted); setState(!muted); }}>
+      {muted ? "Sound off" : "Sound on"}
+    </button>
+  );
+}
+
 export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; client: RoomPort }) {
   const { room, game, you } = snapshot;
   const [selected, setSelected] = useState<number | null>(null);
@@ -777,6 +814,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
   const [confirmResign, setConfirmResign] = useState(false);
   const [spotlight, setSpotlight] = useState<string | null>(null);
   const now = useNow();
+  useGameSounds(snapshot, you?.userId);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -816,6 +854,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
               {room.paused ? "Resume" : "Pause"}
             </button>
           )}
+          <SoundToggle />
           <span className="diag" title="Game version and state fingerprint (support diagnostics)">v{game.gameVersion} · {snapshot.stateHash ?? ""}</span>
         </>}
       />

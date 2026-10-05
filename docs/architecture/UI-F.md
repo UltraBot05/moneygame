@@ -57,6 +57,11 @@ is retired; only its size-agnostic layout math (`app/web/src/board/layout.ts`) r
 15. **3D dice** are CSS cubes (no library): six faces, opposite faces summing to 7, tilted so three
    faces show. A roll tumbles in from extra turns and lands on the server's result; reduced-motion
    users see the result without the tumble.
+16. **Game sounds** are synthesised with Web Audio (no audio files): dice, coin (buy, rent, Start,
+   tax, mortgage), building, landmark, card, auction bid, "your turn", trade offer or fair-play
+   alert, Holding, bankruptcy, win and chat. They follow committed events only (never history
+   present when the screen opened), so every player hears the same moments and nothing hidden is
+   revealed. A Sound on/off toggle in the top bar is remembered per browser.
 
 ## Dev preview
 
