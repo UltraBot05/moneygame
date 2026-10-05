@@ -290,16 +290,30 @@ button.tile:hover { background: #2f3945; }
   display: flex; flex-direction: column; gap: clamp(4px, 1.2cqw, 12px); font-size: clamp(11px, 1.3cqw, 13px);
 }
 .stage-foot .label { font-size: clamp(9px, 1.1cqw, 11px); }
-.stage-dice { display: flex; gap: clamp(8px, 1.6cqw, 16px); }
+/* Room for the tilted cubes (they project wider than --die) and their shadows. */
+.stage-dice { display: flex; gap: clamp(20px, 3.8cqw, 38px); padding: clamp(6px, 1.2cqw, 12px) 0 clamp(14px, 2.4cqw, 24px); }
+/* 3D dice: a CSS cube per die, tilted so three faces show; a roll tumbles onto the result. */
 .die {
   --die: clamp(40px, 7.6cqw, 76px);
   --pip: var(--ink);
-  width: var(--die); height: var(--die); display: grid; place-items: center; background: var(--paper);
-  box-shadow: inset 0 calc(var(--die) * -0.07) 0 #d8d0bd, 0 10px 24px #00000080;
+  position: relative; width: var(--die); height: var(--die); perspective: calc(var(--die) * 5);
 }
-/* Before the first roll the dice show faint pips rather than a result. */
+.die::after {
+  content: ""; position: absolute; left: 8%; right: 8%; bottom: calc(var(--die) * -0.28); height: calc(var(--die) * 0.14);
+  border-radius: 50%; background: #000; opacity: 0.5; filter: blur(5px);
+}
+.die-cube {
+  position: absolute; inset: 0; transform-style: preserve-3d;
+  transform: rotateX(-22deg) rotateY(-26deg) var(--show);
+}
+.die.rolling { animation: mg-hop 0.95s cubic-bezier(.3,.7,.4,1); }
+.die.rolling .die-cube { animation: mg-roll3d 0.95s cubic-bezier(.2,.75,.25,1); }
+.die-face {
+  position: absolute; inset: 0; display: grid; place-items: center; background: var(--paper);
+  border-radius: 10%; backface-visibility: hidden;
+  box-shadow: inset 0 0 0 1px #d8d0bd, inset 0 0 calc(var(--die) * 0.16) #00000024;
+}
 .die.idle { --pip: #d3cab6; }
-.die.rolling { animation: mg-tumble 0.7s cubic-bezier(.3,.7,.4,1); }
 .pips {
   display: grid; grid-template-columns: repeat(3, calc(var(--die) * 0.16)); grid-template-rows: repeat(3, calc(var(--die) * 0.16));
   gap: calc(var(--die) * 0.04);
@@ -492,12 +506,13 @@ button.tile:hover { background: #2f3945; }
 
 @keyframes mg-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.55 } }
 @keyframes mg-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(calc(var(--pawn, 20px) * -0.18)) } }
-@keyframes mg-tumble {
-  0% { transform: translateY(0) rotate(0deg) }
-  25% { transform: translateY(-22px) rotate(96deg) }
-  50% { transform: translateY(0) rotate(190deg) }
-  72% { transform: translateY(-9px) rotate(268deg) }
-  100% { transform: translateY(0) rotate(360deg) }
+@keyframes mg-roll3d { from { transform: rotateX(-22deg) rotateY(-26deg) var(--spin); } }
+@keyframes mg-hop {
+  0% { transform: translateY(0) }
+  30% { transform: translateY(calc(var(--die) * -0.5)) }
+  60% { transform: translateY(0) }
+  78% { transform: translateY(calc(var(--die) * -0.12)) }
+  100% { transform: translateY(0) }
 }
 @keyframes mg-flash { 0% { opacity: 0; transform: translateY(6px) } 100% { opacity: 1; transform: translateY(0) } }
 

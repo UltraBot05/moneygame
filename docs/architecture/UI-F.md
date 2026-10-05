@@ -54,6 +54,9 @@ is retired; only its size-agnostic layout math (`app/web/src/board/layout.ts`) r
    all meet WCAG AA (lowest 5.3:1).
 14. **Player spotlight**: hovering or keyboard-focusing a player in the list keeps that player's
    deeds and pawn tile in full colour, outlined in their colour, and dims the rest of the board.
+15. **3D dice** are CSS cubes (no library): six faces, opposite faces summing to 7, tilted so three
+   faces show. A roll tumbles in from extra turns and lands on the server's result; reduced-motion
+   users see the result without the tumble.
 
 ## Dev preview
 

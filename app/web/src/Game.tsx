@@ -61,12 +61,33 @@ const PIP_CELLS: Readonly<Record<number, readonly number[]>> = {
   1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
 };
 
-function Die({ face, rolling }: { face: number | null; rolling: boolean }) {
-  const cells = PIP_CELLS[face ?? 1] ?? [];
+/**
+ * A CSS 3D die: six faces on a cube (opposite faces sum to 7), each with its placement and the
+ * cube rotation [x, y] that turns it to the front. A roll tumbles in from extra turns and lands on
+ * the server's number; the result is never decided here.
+ */
+const FACES: readonly (readonly [value: number, place: string, x: number, y: number])[] = [
+  [1, "rotateY(0deg)", 0, 0], [6, "rotateY(180deg)", 0, 180], [3, "rotateY(90deg)", 0, -90],
+  [4, "rotateY(-90deg)", 0, 90], [2, "rotateX(90deg)", -90, 0], [5, "rotateX(-90deg)", 90, 0],
+];
+
+function Die({ face, rolling, spin = 1 }: { face: number | null; rolling: boolean; spin?: 1 | -1 }) {
+  const [, , x, y] = FACES.find(([value]) => value === (face ?? 1)) ?? FACES[0] as (typeof FACES)[number];
+  // Same function list in both, so the browser interpolates angles (whole extra turns) rather than matrices.
+  const cube = {
+    "--show": "rotateX(" + x + "deg) rotateY(" + y + "deg) rotateZ(0deg)",
+    "--spin": "rotateX(" + (x + 720 * spin) + "deg) rotateY(" + (y + 360 * spin) + "deg) rotateZ(" + 180 * spin + "deg)",
+  } as CSSProperties;
   return (
-    <span className={"die" + (rolling ? " rolling" : "") + (face === null ? " idle" : "")} aria-label={face === null ? "die" : "die showing " + face}>
-      <span className="pips">
-        {Array.from({ length: 9 }, (_unused, cell) => <i key={cell} style={{ background: cells.includes(cell) ? "var(--pip)" : "transparent" }} />)}
+    <span className={"die" + (rolling ? " rolling" : "") + (face === null ? " idle" : "")} role="img" aria-label={face === null ? "die" : "die showing " + face}>
+      <span className="die-cube" style={cube}>
+        {FACES.map(([value, place]) => (
+          <span key={value} className="die-face" style={{ transform: place + " translateZ(calc(var(--die) / 2))" }}>
+            <span className="pips">
+              {Array.from({ length: 9 }, (_unused, cell) => <i key={cell} style={{ background: PIP_CELLS[value]?.includes(cell) ? "var(--pip)" : "transparent" }} />)}
+            </span>
+          </span>
+        ))}
       </span>
     </span>
   );
@@ -335,7 +356,7 @@ function CenterStage(props: StageProps) {
         <span className="label" style={{ color: turn.isMine ? "var(--primary-light)" : "var(--on-slate-mute)" }}>{turn.kicker}</span>
         <div className="stage-dice">
           <Die key={"a" + (roll?.id ?? 0)} face={roll?.dice[0] ?? null} rolling={roll !== null} />
-          <Die key={"b" + (roll?.id ?? 0)} face={roll?.dice[1] ?? null} rolling={roll !== null} />
+          <Die key={"b" + (roll?.id ?? 0)} face={roll?.dice[1] ?? null} rolling={roll !== null} spin={-1} />
         </div>
         {roll !== null && (
           <span className="total-chip">
