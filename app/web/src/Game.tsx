@@ -13,6 +13,7 @@ import {
   nameOf,
   PATTERN_CSS,
   playerModels,
+  textOn,
   tileBand,
   turnModel,
   type ActionButton,
@@ -41,12 +42,17 @@ function clockText(seconds: number | null): string {
   return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
 }
 
-function Band({ tile, className }: { tile: TileModel; className: string }) {
+/** The set band on a tile's inner edge; buildings sit on it (as on a printed board) in place of the code. */
+function Band({ tile, className, level = 0 }: { tile: TileModel; className: string; level?: number }) {
   const band = tileBand(tile);
   if (band === null) return null;
   return (
     <span className={className} style={{ background: band.color, ...PATTERN_CSS[band.pattern] }}>
-      <span className="tile-code">{band.code}</span>
+      {level > 0 ? (
+        <span className="tile-dev" aria-label={level === 4 ? "landmark" : level + " buildings"}>
+          {level === 4 ? <i className="landmark" /> : Array.from({ length: level }, (_unused, index) => <i key={index} />)}
+        </span>
+      ) : <span className="tile-code">{band.code}</span>}
     </span>
   );
 }
@@ -56,11 +62,11 @@ const PIP_CELLS: Readonly<Record<number, readonly number[]>> = {
 };
 
 function Die({ face, rolling }: { face: number | null; rolling: boolean }) {
-  const cells = face === null ? [] : PIP_CELLS[face] ?? [];
+  const cells = PIP_CELLS[face ?? 1] ?? [];
   return (
-    <span className={"die" + (rolling ? " rolling" : "")} aria-label={face === null ? "die" : "die showing " + face}>
+    <span className={"die" + (rolling ? " rolling" : "") + (face === null ? " idle" : "")} aria-label={face === null ? "die" : "die showing " + face}>
       <span className="pips">
-        {Array.from({ length: 9 }, (_unused, cell) => <i key={cell} style={{ background: cells.includes(cell) ? "var(--ink)" : "transparent" }} />)}
+        {Array.from({ length: 9 }, (_unused, cell) => <i key={cell} style={{ background: cells.includes(cell) ? "var(--pip)" : "transparent" }} />)}
       </span>
     </span>
   );
@@ -72,6 +78,8 @@ interface BoardProps {
   readonly players: readonly PlayerModel[];
   readonly selected: number | null;
   readonly onSelect: (index: number) => void;
+  /** A player hovered or focused in the list: their deeds and pawn light up, the rest dims. */
+  readonly spotlight: string | null;
   readonly children: ReactNode;
 }
 
@@ -104,13 +112,16 @@ function useSteppedPositions(game: ProjectedGameState): Readonly<Record<string, 
   return shown;
 }
 
-function BoardView({ game, board, players, selected, onSelect, children }: BoardProps) {
+function BoardView({ game, board, players, selected, onSelect, spotlight, children }: BoardProps) {
   const shown = useSteppedPositions(game);
   const activeUserId = players.find((player) => player.active)?.userId;
   const activeTile = activeUserId === undefined ? null : shown[activeUserId] ?? null;
+  const spot = players.find((player) => player.userId === spotlight && !player.bankrupt);
+  const spotTile = spot === undefined ? null : shown[spot.userId] ?? null;
   const layout = useMemo(() => computeLayout(board.tiles.length), [board.tiles.length]);
   return (
-    <div className="board" role="group" aria-label={board.label + " board"}>
+    <div className={"board" + (spot === undefined ? "" : " spotlit")} role="group" aria-label={board.label + " board"}
+      style={spot === undefined ? undefined : { "--spot": spot.color } as CSSProperties}>
       <div className="board-grid" style={{ "--per-side": layout.perSide } as CSSProperties}>
         {layout.tiles.map((position) => {
           const tile = board.tiles[position.index];
@@ -118,7 +129,8 @@ function BoardView({ game, board, players, selected, onSelect, children }: Board
           const here = players.filter((player) => !player.bankrupt && shown[player.userId] === tile.index);
           return (
             <TileView key={tile.index} tile={tile} position={position} game={game} players={players} here={here}
-              selected={selected === tile.index} activeHere={activeTile === tile.index} onSelect={onSelect} />
+              selected={selected === tile.index} activeHere={activeTile === tile.index} onSelect={onSelect}
+              spotlight={spot?.userId ?? null} spotHere={spotTile === tile.index} />
           );
         })}
         <div className="stage" style={{ gridRow: layout.center.row + " / span " + layout.center.span, gridColumn: layout.center.column + " / span " + layout.center.span }}>
@@ -139,16 +151,36 @@ interface TileProps {
   /** The active player's pawn stands here. */
   readonly activeHere: boolean;
   readonly onSelect: (index: number) => void;
+  readonly spotlight: string | null;
+  /** The spotlit player's pawn stands here. */
+  readonly spotHere: boolean;
 }
 
+/**
+ * Pawns in their own area of the tile. Several on one tile overlap sideways (--n) to fit; five or
+ * more (the start of a big match, a full Holding) split into two rows of smaller pawns.
+ */
 function Tokens({ list }: { list: readonly PlayerModel[] }) {
   if (list.length === 0) return null;
-  return <span className="tile-tokens">{list.map((player) => <Token key={player.userId} player={player} active={player.active} />)}</span>;
+  const half = Math.ceil(list.length / 2);
+  const rows = list.length > 4 ? [list.slice(0, half), list.slice(half)] : [list];
+  return (
+    <span className={"tile-tokens" + (rows.length > 1 ? " crowded" : "")}>
+      {rows.map((row, index) => (
+        <span key={index} className="token-row" style={{ "--n": row.length } as CSSProperties}>
+          {row.map((player) => <Token key={player.userId} player={player} active={player.active} />)}
+        </span>
+      ))}
+    </span>
+  );
 }
 
-function TileView({ tile, position, game, players, here, selected, activeHere, onSelect }: TileProps) {
+function TileView({ tile, position, game, players, here, selected, activeHere, onSelect, spotlight, spotHere }: TileProps) {
   const place = { gridRow: position.gridRow, gridColumn: position.gridColumn };
-  const highlight = activeHere ? " tile-active" : "";
+  const asset = game.assets.find((candidate) => candidate.tileIndex === tile.index);
+  const owner = asset?.ownerUserId === null || asset === undefined ? undefined : players.find((player) => player.userId === asset.ownerUserId);
+  const lit = spotHere || (spotlight !== null && owner?.userId === spotlight);
+  const highlight = (activeHere ? " tile-active" : "") + (lit ? " tile-lit" : "");
   if (tile.kind === "corner") {
     const holding = tile.corner === "HOLDING";
     const inside = here.filter((player) => player.inHolding);
@@ -175,32 +207,29 @@ function TileView({ tile, position, game, players, here, selected, activeHere, o
       </div>
     );
   }
-  const asset = game.assets.find((candidate) => candidate.tileIndex === tile.index);
-  const owner = asset?.ownerUserId === null || asset === undefined ? undefined : players.find((player) => player.userId === asset.ownerUserId);
   const levelCount = asset?.kind === "PROPERTY" ? asset.developmentLevel : 0;
   const band = tileBand(tile);
   const ownable = asset !== undefined;
   const label = tile.name + (owner === undefined ? "" : ", owned by " + owner.name) + (asset?.mortgaged ? ", mortgaged" : "");
-  const fitted = fitName(tile.name, position.edge === "left" || position.edge === "right" ? 8.5 : 6.5);
+  const price = tile.price !== null ? money(tile.price) : tile.taxAmount !== null ? money(tile.taxAmount) : null;
+  // Side tiles lose width to the outer strip; card tiles (no price) have none and keep the room.
+  const side = position.edge === "left" || position.edge === "right";
+  const fitted = fitName(tile.name, side ? (owner !== undefined || price !== null ? 6 : 8.5) : 6.5);
+  // Inner edge: set band (and buildings). Body: the name, then the pawn area (with the tile's icon
+  // behind it). Outer edge: the price, replaced by the owner's colour once bought.
   const content = (
     <>
-      <Band tile={tile} className="tile-band" />
+      <Band tile={tile} className="tile-band" level={levelCount} />
       <span className="tile-body">
-        {tile.kind !== "property" && band !== null && <span className="tile-glyph" style={{ color: band.color }}>{band.glyph}</span>}
         <span className="tile-name" style={{ "--fit": fitted.fit } as CSSProperties}>{fitted.text}</span>
-        <span className="tile-foot">
-          {owner !== undefined
-            ? <span className="tile-owner" style={{ borderLeftColor: owner.color }}>{owner.initials}</span>
-            : <span className="tile-price tabular">{tile.price !== null ? money(tile.price) : tile.taxAmount !== null ? money(tile.taxAmount) : ""}</span>}
-          {levelCount > 0 && (
-            <span className="tile-dev" aria-label={levelCount === 4 ? "landmark" : levelCount + " buildings"}>
-              {levelCount === 4 ? <i className="landmark" /> : Array.from({ length: levelCount }, (_unused, index) => <i key={index} />)}
-            </span>
-          )}
+        <span className="tile-zone">
+          {tile.kind !== "property" && band !== null && <span className="tile-glyph" style={{ color: "color-mix(in srgb, " + band.color + " 60%, #fff)" }}>{band.glyph}</span>}
+          <Tokens list={here} />
         </span>
       </span>
-      {asset?.mortgaged && <span className="tile-mortgaged" />}
-      <Tokens list={here} />
+      {owner !== undefined
+        ? <span className={"tile-strip owned" + (asset?.mortgaged ? " mortgaged" : "")} style={{ background: owner.color, color: textOn(owner.color) }}>{owner.initials}</span>
+        : price !== null && <span className="tile-strip tabular">{price}</span>}
     </>
   );
   return ownable ? (
@@ -292,17 +321,18 @@ function CenterStage(props: StageProps) {
   const turn = turnModel(game, room, board, viewerUserId);
   const roll = lastRoll(snapshot);
   const rollAction = turn.primary?.intent.type === "ROLL_DICE" ? turn.primary : null;
-  const lastLine = latest === undefined ? null : describeEvent(latest.event, latest.game, board, (userId) => nameOf(room, userId)).at(-1);
+  // The latest few log lines sit under the dice, newest first, so the centre tells the story of the turn.
+  const recent = snapshot.events.slice(-4).flatMap((entry) => describeEvent(entry.event, entry.game, board, (userId) => nameOf(room, userId))).slice(-5).reverse();
   const order = players.filter((player) => !player.bankrupt);
   const mySets = board.sets.filter((set) => set.tileIndexes.some((index) => game.assets.find((asset) => asset.tileIndex === index)?.ownerUserId === viewerUserId));
   return (
     <div className="stage-pad">
       <div className="stage-head">
         <span className="stage-brand">Money<span>·</span>Game</span>
-        <span className="label" style={{ color: "var(--ink-mute)" }}>{board.label}</span>
+        <span className="label" style={{ color: "var(--on-slate-mute)" }}>{board.label}</span>
       </div>
       <div className="stage-mid">
-        <span className="label" style={{ color: turn.isMine ? "var(--primary)" : "var(--ink-mute)" }}>{turn.kicker}</span>
+        <span className="label" style={{ color: turn.isMine ? "var(--primary-light)" : "var(--on-slate-mute)" }}>{turn.kicker}</span>
         <div className="stage-dice">
           <Die key={"a" + (roll?.id ?? 0)} face={roll?.dice[0] ?? null} rolling={roll !== null} />
           <Die key={"b" + (roll?.id ?? 0)} face={roll?.dice[1] ?? null} rolling={roll !== null} />
@@ -317,20 +347,19 @@ function CenterStage(props: StageProps) {
           <button type="button" className="btn btn-primary stage-roll" disabled={busy}
             onClick={() => act(rollAction.intent)}>{rollAction.label}</button>
         )}
+        {recent.length > 0 && (
+          <ol className="stage-log" aria-label="Recent moves">
+            {recent.map((line, index) => <li key={index}>{line}</li>)}
+          </ol>
+        )}
       </div>
       <div className="stage-foot">
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span className="label" style={{ color: "var(--ink-mute)" }}>Turn order</span>
+          <span className="label" style={{ color: "var(--on-slate-mute)" }}>Turn order</span>
           {order.map((player) => <Token key={player.userId} player={player} size={22} active={player.active} />)}
-          {mySets.length > 0 && <span className="label" style={{ color: "var(--ink-mute)", marginLeft: "auto" }}>Your sets</span>}
+          {mySets.length > 0 && <span className="label" style={{ color: "var(--on-slate-mute)", marginLeft: "auto" }}>Your sets</span>}
           {mySets.map((set) => <span key={set.setId} title={set.country} style={{ width: 12, height: 12, background: set.color, ...PATTERN_CSS[set.pattern] }} />)}
         </div>
-        {lastLine !== null && lastLine !== undefined && (
-          <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-            <span className="label" style={{ color: "var(--brass-text)" }}>Last</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{lastLine}</span>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -352,8 +381,8 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
   return (
     <div className="stage-pad">
       <div className="stage-head">
-        <span className="label" style={{ color: "var(--primary)" }}>Auction live</span>
-        <span className="label" style={{ color: seconds !== null && seconds <= 5 ? "var(--primary)" : "var(--ink-mute)" }}>
+        <span className="label" style={{ color: "var(--primary-light)" }}>Auction live</span>
+        <span className="label" style={{ color: seconds !== null && seconds <= 5 ? "var(--primary-light)" : "var(--on-slate-mute)" }}>
           {nameOf(room, auction.currentActorUserId)} to act · closes {clockText(seconds)}
         </span>
       </div>
@@ -362,11 +391,11 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
           <div className="auction-lot">
             <span className="auction-lot-band" style={{ background: tileBand(tile)?.color, ...PATTERN_CSS[tileBand(tile)?.pattern ?? "solid"] }}>{tileBand(tile)?.code}</span>
             <span style={{ padding: 8, fontWeight: 900, textTransform: "uppercase", fontSize: 14, lineHeight: 1.1 }}>{tile.name}</span>
-            <span style={{ padding: "0 8px 8px", fontSize: 11, fontWeight: 700, color: "var(--ink-mute)" }}>List {money(tile.price ?? 0)}</span>
+            <span style={{ padding: "0 8px 8px", fontSize: 11, fontWeight: 700, color: "var(--on-slate-mute)" }}>List {money(tile.price ?? 0)}</span>
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
-          <span className="label" style={{ color: "var(--ink-mute)" }}>Current bid</span>
+          <span className="label" style={{ color: "var(--on-slate-mute)" }}>Current bid</span>
           <span className="auction-figure tabular">{auction.highBid === null ? "No bids" : money(auction.highBid)}</span>
           <span style={{ fontWeight: 700 }}>
             {auction.highBidderUserId === null ? "Opening bid " + money(minimum) : "Leader: " + nameOf(room, auction.highBidderUserId)}
@@ -391,16 +420,16 @@ function AuctionStage({ game, room, board, players, viewerUserId, busy, act, now
                 <button type="button" className="btn btn-primary" disabled={busy || !(customAmount >= minimum && customAmount <= me.cash)} onClick={() => bid(customAmount)}>Bid</button>
                 <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act({ type: "PASS_AUCTION", payload: { auctionId: auction.auctionId } })}>Pass</button>
               </div>
-              <span style={{ fontSize: 12, color: "var(--ink-mute)" }}>Minimum {money(minimum)} · your cash {money(me.cash)}</span>
+              <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>Minimum {money(minimum)} · your cash {money(me.cash)}</span>
             </>
           ) : (
-            <span style={{ fontSize: 12, color: "var(--ink-mute)" }}>Waiting for {nameOf(room, auction.currentActorUserId)}.</span>
+            <span style={{ fontSize: 12, color: "var(--on-slate-mute)" }}>Waiting for {nameOf(room, auction.currentActorUserId)}.</span>
           )}
         </div>
       </div>
       <div className="stage-foot">
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <span className="label" style={{ color: "var(--ink-mute)" }}>In the room</span>
+          <span className="label" style={{ color: "var(--on-slate-mute)" }}>In the room</span>
           {auction.participantOrder.map((userId) => {
             const player = players.find((candidate) => candidate.userId === userId);
             if (player === undefined) return null;
@@ -478,6 +507,8 @@ interface RailProps {
   readonly onSelect: (index: number) => void;
   readonly onBankrupt: () => void;
   readonly onResign: () => void;
+  readonly spotlight: string | null;
+  readonly onSpotlight: (userId: string | null) => void;
 }
 
 function DebtPanel({ game, room, board, viewerUserId, now, snapshot, onSelect, onTrade, onBankrupt, busy }: RailProps) {
@@ -532,11 +563,11 @@ function TurnPanel(props: RailProps) {
       <div className="turn-head">
         {active !== undefined && <Token player={active} size={34} active />}
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-          <span className="label" style={{ color: turn.isMine ? "var(--primary)" : "var(--ink-mute)" }}>{turn.kicker}</span>
+          <span className="label" style={{ color: turn.isMine ? "var(--primary-light)" : "var(--on-slate-mute)" }}>{turn.kicker}</span>
           <span className="turn-name">{active?.name ?? "Match"}</span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          <span className="tabular" style={{ fontWeight: 800, fontSize: 15, color: seconds !== null && seconds <= 10 ? "var(--primary)" : "var(--ink)" }}>{clockText(seconds)}</span>
+          <span className="tabular" style={{ fontWeight: 800, fontSize: 15, color: seconds !== null && seconds <= 10 ? "var(--primary-light)" : "var(--paper-3)" }}>{clockText(seconds)}</span>
           <span className="timer-bar"><span style={{ width: seconds === null ? 0 : Math.min(100, (seconds / total) * 100) + "%" }} /></span>
         </div>
       </div>
@@ -598,7 +629,7 @@ function TradeInbox({ game, room, viewerUserId, onTrade, busy, act }: RailProps)
         const incoming = trade.recipientUserId === viewerUserId;
         return (
           <div key={trade.tradeId} className="notice">
-            <span className="label" style={{ color: "var(--brass-text)" }}>{incoming ? "Offer" : "Sent"}</span>
+            <span className="label" style={{ color: "var(--brass-light)" }}>{incoming ? "Offer" : "Sent"}</span>
             <span style={{ flex: 1 }}>{incoming ? "From " + nameOf(room, trade.proposerUserId) : "To " + nameOf(room, trade.recipientUserId)}</span>
             {incoming
               ? <button type="button" className="btn btn-dark" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => onTrade({ mode: "REVIEW", tradeId: trade.tradeId })}>Review</button>
@@ -610,13 +641,18 @@ function TradeInbox({ game, room, viewerUserId, onTrade, busy, act }: RailProps)
   );
 }
 
-function PlayersPanel({ players, room }: RailProps) {
+function PlayersPanel({ players, room, spotlight, onSpotlight }: RailProps) {
   return (
     <section className="panel-slate" aria-label="Players" style={{ flex: "none" }}>
       <div className="panel-slate-head"><span className="label">Players</span><span className="label">{players.filter((player) => !player.bankrupt).length} in</span></div>
       <div className="scroll" style={{ overflowY: "auto", maxHeight: "min(520px, 42vh)" }}>
         {players.map((player) => (
-          <div key={player.userId} className={"player-row" + (player.active ? " current" : "") + (player.bankrupt ? " out" : "")} style={{ borderLeftColor: player.active ? player.color : "transparent" }}>
+          // Hover or focus a row to light up that player's deeds and pawn on the board.
+          <div key={player.userId} className={"player-row" + (player.active ? " current" : "") + (player.bankrupt ? " out" : "") + (spotlight === player.userId ? " lit" : "")}
+            style={{ borderLeftColor: player.active || spotlight === player.userId ? player.color : "transparent" }}
+            tabIndex={player.bankrupt ? undefined : 0} title={player.bankrupt ? undefined : "Show " + player.name + "'s deeds and pawn"}
+            onMouseEnter={() => onSpotlight(player.userId)} onMouseLeave={() => onSpotlight(null)}
+            onFocus={() => onSpotlight(player.userId)} onBlur={() => onSpotlight(null)}>
             <Token player={player} size={26} />
             <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
               <span className="player-name">{player.name}{player.userId === room.hostUserId ? " · host" : ""}</span>
@@ -718,6 +754,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
   const [trade, setTrade] = useState<TradeDraft | null>(null);
   const [confirmBankrupt, setConfirmBankrupt] = useState(false);
   const [confirmResign, setConfirmResign] = useState(false);
+  const [spotlight, setSpotlight] = useState<string | null>(null);
   const now = useNow();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -744,6 +781,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
   const railProps: RailProps = {
     snapshot, client, game, room, board, players, viewerUserId, spectator, busy, act, now,
     onTrade: setTrade, onSelect: setSelected, onBankrupt: () => setConfirmBankrupt(true), onResign: () => setConfirmResign(true),
+    spotlight, onSpotlight: setSpotlight,
   };
   const seconds = secondsLeft(room.turnDeadlineAt, now, snapshot.clockOffset);
   return (
@@ -762,7 +800,7 @@ export function GameScreen({ snapshot, client }: { snapshot: RoomSnapshot; clien
       />
       <div className="game-body">
         <main className="board-area">
-          <BoardView game={game} board={board} players={players} selected={selected} onSelect={(index) => setSelected(index === selected ? null : index)}>
+          <BoardView game={game} board={board} players={players} selected={selected} onSelect={(index) => setSelected(index === selected ? null : index)} spotlight={spotlight}>
             <CenterStage snapshot={snapshot} game={game} room={room} board={board} players={players} viewerUserId={viewerUserId} busy={busy || spectator} act={act} now={now} />
           </BoardView>
           {selected !== null && (
