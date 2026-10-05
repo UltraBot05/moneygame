@@ -47,7 +47,8 @@ export function lobbyWithThree(): { db: DatabaseSync; sql: SqlDb } {
 
 export function startedRoom(): { db: DatabaseSync; sql: SqlDb } {
   const room = lobbyWithThree();
-  expect(handleRoomAction(room.sql, HOST.userId, { kind: "START" }, deps(T0))).toMatchObject({ kind: "COMMITTED" });
+  // The first rng draw picks who moves first; face 1 (offset 0) keeps the host first for these tests.
+  expect(handleRoomAction(room.sql, HOST.userId, { kind: "START" }, deps(T0, [1]))).toMatchObject({ kind: "COMMITTED" });
   return room;
 }
 

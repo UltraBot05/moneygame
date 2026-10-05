@@ -9,7 +9,7 @@ gates are in `RELEASE-GATES.md`.
 | QA-002 reconnect chaos | Same suite: a player's tab is closed and reopened (rejoin, same seat), then a second tab for the same account replaces the first ("Opened somewhere else"), with convergence asserted after each. During the first local 10-browser run the Worker was also hot-reloaded five times by code edits (the runtime restarted, every socket dropped and reconnected, Durable Object state reloaded from storage) and all ten clients kept converging through turn 463 | pass |
 | QA-003 persistence/deadline failures | `app/worker/src/persistence-faults.test.ts`: storage failures injected inside a command commit and a turn-timeout commit roll back completely; the retry (same actionId or same due deadline) applies exactly once, including through a fresh adapter | pass |
 | QA-004 1000+ cross-board rematches | `app/worker/src/rematch-soak.test.ts`: 1,000 rematches in one room alternating Standard and Grand; every new game is fresh (id, version 1, board, cash, owners, eliminations, trades) and replayed commands from older games are refused as stale | pass |
-| QA-005 large seeded fuzz | `pnpm fuzz:production` at 100 seeds for each of 9 configurations: 900 games, 3.0 million commands (2.15M accepted, 776k refused, 41k malformed, 45k duplicate replays) | **0 invariant failures** (`PRODUCTION-FUZZ.json`) |
+| QA-005 large seeded fuzz | `pnpm fuzz:production` at 120 seeds for each of 9 configurations, rerun 2026-10-06 with the open timed auction: 1,080 games, 3.6 million commands (2.57M accepted, 928k refused, 49k malformed, 54k duplicate replays). The 2026-09-29 run (turn-order auction, 900 games, 3.0M commands) was also clean | **0 invariant failures** (`PRODUCTION-FUZZ.json`) |
 | QA-008 cross-browser | Smoke suite on Chromium, Firefox and WebKit in CI (Edge is Chromium) | 15/15 in CI |
 | QA-011 production fuzz/sim | `production-fuzz.ts` and `production-simulator.ts` drive the real transition function; invariants: card conservation, fixed asset set, non-negative cash, version +1 per commit, refusals and malformed input change nothing, replayed actionIds are duplicates, seeds replay exactly | pass |
 | QA-012 runtime/browser foundation | `pnpm test:e2e:live` runs in CI (Worker, Durable Objects, local D1, several browsers) | 1/1 in CI |
@@ -38,3 +38,21 @@ SPIKE-008 bands at 250 seeds.
 QA-001 status: convergence through a long 10-browser match is shown and a complete match is
 shown with 4 browsers, but a *complete* 10-browser match is not yet recorded. Close it with the
 GRAND-005 human session at 10 players (or a longer unattended run).
+
+## Seat fairness (2026-10-06)
+
+`pnpm simulate:seats` (500 bot games per setup, the production rules and bots) records who wins by
+seat, seat 1 moving first:
+
+| Setup | Seat 1 | Seat 2 | Last seat | Fair share |
+| --- | --- | --- | --- | --- |
+| Standard, 4 players | 32.8% | 23.0% | 20.4% | 25% |
+| Standard, 6 players | 26.8% | 23.0% | 8.4% | 16.7% |
+| Grand, 8 players | 27.2% | 22.6% | 2.4% | 12.5% |
+| Grand, 10 players | 27.4% | 20.0% | 0.6% | 10% |
+
+Moving early is a large edge for these bots (they buy everything they can afford, so the first
+laps decide the land). Before this the host always took seat 1. Decision: the runtime picks a
+random first player for every match (the order around the table is kept), so each player's chance
+of the edge is equal; starting cash stays uniform (owner decision, ARCHITECTURE-FREEZE section 11).
+How large the edge is with human players is a question for the GRAND-005 / QA-015 playtests.

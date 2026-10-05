@@ -261,3 +261,7 @@ Decided by the product owner for RULE-011, 012, 016, 017, 018, and 019, followin
   bid it stays with the bank), or early once only the leader (or, with no bid, nobody) is still in.
   Reason: players should not have to answer every auction, and "if nobody bids in time, nobody gets
   it" is simpler to read at the table.
+- **Random first player, uniform starting cash (2026-10-06).** A seat simulation (below) showed a
+  strong first-mover edge, and the host (seat 1) always moved first. The runtime now rotates the seats
+  by a random offset when a match starts, so anyone may move first while the order around the table
+  is unchanged. Every player still starts with the same cash; the owner declined seat compensation.

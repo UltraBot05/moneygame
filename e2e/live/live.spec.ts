@@ -148,7 +148,8 @@ async function act(pages: readonly Page[], names: readonly string[], actions: nu
       await debt.getByRole("button", { name: "Declare bankruptcy" }).click();
       return true;
     }
-    const pass = page.locator(".stage").getByRole("button", { name: "Pass", exact: true });
+    // Open auction: anyone still in may opt out; the driver never bids, so auctions close fast.
+    const pass = page.locator(".stage").getByRole("button", { name: "Not interested", exact: true });
     if (await pass.isVisible() && await pass.isEnabled()) {
       await pass.click();
       return true;

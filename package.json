@@ -20,6 +20,7 @@
     "build": "pnpm --filter @moneygame/web build && pnpm --filter @moneygame/worker build",
     "simulate:production": "vitest run --config vitest.config.simulation.ts simulate-production",
     "fuzz:production": "vitest run --config vitest.config.simulation.ts fuzz-production",
+    "simulate:seats": "vitest run --config vitest.config.simulation.ts seat-fairness",
     "simulate:reconciliation": "node --experimental-strip-types packages/game-core/src/spike-008/reconciliation-cli.ts"
   },
   "devDependencies": {

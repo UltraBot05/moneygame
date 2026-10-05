@@ -148,7 +148,10 @@ export class GameRoom extends DurableObject<Env> {
   override async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
     const attachment = ws.deserializeAttachment() as Attachment | null;
     if (attachment?.role === "PLAYER") disconnect(this.db, attachment.userId, attachment.epoch, Date.now());
-    ws.close(code, reason);
+    // The platform reports reserved codes (1005 no status, 1006 abnormal) that may not be sent back;
+    // echoing one threw before the broadcast, so the others never saw the player drop. Only 1000 and
+    // 3000-4999 are sendable.
+    ws.close(code === 1000 || (code >= 3000 && code <= 4999) ? code : 1000, reason);
     this.broadcast(null);
   }
 

@@ -17,7 +17,7 @@ import {
   runDueTimeouts,
   viewerGame,
 } from "./room-runtime";
-import { BEN, command, CY, deps, fresh, game, HOST, patchHost, startedRoom, T0 } from "./room.testkit";
+import { BEN, command, CY, deps, fresh, game, HOST, lobbyWithThree, patchHost, startedRoom, T0 } from "./room.testkit";
 import { nodeDb } from "./sqlite.testkit";
 
 describe("RT-001 rooms, membership and lobby", () => {
@@ -164,3 +164,19 @@ describe("RT-008 reconnect, extension and rejoin", () => {
     expect(roomView(sql, T0 + 200_000)?.members[1]).toMatchObject({ connected: true, away: false });
   });
 });
+
+describe("random first player (owner decision 2026-10-06)", () => {
+  it("rotates the seats by a random offset: anyone may move first, the order around the table is kept", () => {
+    const seats = [HOST.userId, BEN.userId, CY.userId];
+    // Die faces 1, 3 and 5 make the start's first rng draw land on offsets 0, 1 and 2.
+    for (const [face, offset] of [[1, 0], [3, 1], [5, 2]] as const) {
+      const { sql } = lobbyWithThree();
+      expect(handleRoomAction(sql, HOST.userId, { kind: "START" }, deps(T0, [face]))).toMatchObject({ kind: "COMMITTED" });
+      const started = game(sql);
+      const expected = [...seats.slice(offset), ...seats.slice(0, offset)];
+      expect(started.turn?.activePlayerId).toBe(expected[0]);
+      expect([...started.players].sort((a, b) => a.seatIndex - b.seatIndex).map((player) => player.userId)).toEqual(expected);
+    }
+  });
+});
+

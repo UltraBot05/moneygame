@@ -38,7 +38,7 @@ describe("QA-004 cross-board rematch soak", () => {
       expect(handleRoomAction(sql, HOST.userId, { kind: "CONFIGURE", settings: { ...DEFAULT_ROOM_SETTINGS, boardRef } }, deps(now)))
         .toMatchObject({ kind: "COMMITTED" });
       for (const user of [HOST, BEN, CY]) handleRoomAction(sql, user.userId, { kind: "SET_READY", ready: true }, deps(now));
-      expect(handleRoomAction(sql, HOST.userId, { kind: "START" }, deps(now + 1))).toMatchObject({ kind: "COMMITTED" });
+      expect(handleRoomAction(sql, HOST.userId, { kind: "START" }, deps(now + 1, [1]))).toMatchObject({ kind: "COMMITTED" }); // host moves first
 
       const current = game(sql);
       expect(current).toMatchObject({ gameId: "game-" + (index + 1), gameVersion: 1, phase: "ACTIVE_TURN" });

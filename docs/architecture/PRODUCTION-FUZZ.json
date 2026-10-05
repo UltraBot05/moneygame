@@ -1,96 +1,96 @@
 {
   "schema": "production-fuzz/1",
-  "seedsPerConfiguration": 100,
+  "seedsPerConfiguration": 120,
   "configurations": [
     {
       "boardRef": "world-tour-standard@1",
       "players": 3,
-      "seeds": 100,
-      "finished": 50,
-      "accepted": 174763,
-      "refused": 61636,
-      "malformed": 3310,
-      "duplicates": 3699
+      "seeds": 120,
+      "finished": 59,
+      "accepted": 212826,
+      "refused": 74774,
+      "malformed": 3977,
+      "duplicates": 4466
     },
     {
       "boardRef": "world-tour-standard@1",
       "players": 4,
-      "seeds": 100,
-      "finished": 21,
-      "accepted": 240749,
-      "refused": 86588,
-      "malformed": 4353,
-      "duplicates": 5074
+      "seeds": 120,
+      "finished": 27,
+      "accepted": 284868,
+      "refused": 102459,
+      "malformed": 5245,
+      "duplicates": 5992
     },
     {
       "boardRef": "world-tour-standard@1",
       "players": 5,
-      "seeds": 100,
-      "finished": 25,
-      "accepted": 235824,
-      "refused": 84295,
-      "malformed": 4369,
-      "duplicates": 4930
+      "seeds": 120,
+      "finished": 31,
+      "accepted": 280882,
+      "refused": 100512,
+      "malformed": 5217,
+      "duplicates": 5910
     },
     {
       "boardRef": "world-tour-standard@1",
       "players": 6,
-      "seeds": 100,
-      "finished": 19,
-      "accepted": 247178,
-      "refused": 89417,
-      "malformed": 4709,
-      "duplicates": 5150
+      "seeds": 120,
+      "finished": 22,
+      "accepted": 298121,
+      "refused": 107719,
+      "malformed": 5693,
+      "duplicates": 6243
     },
     {
       "boardRef": "world-tour-grand@1",
       "players": 6,
-      "seeds": 100,
-      "finished": 38,
-      "accepted": 227918,
-      "refused": 82130,
-      "malformed": 4390,
-      "duplicates": 4874
+      "seeds": 120,
+      "finished": 47,
+      "accepted": 272530,
+      "refused": 98067,
+      "malformed": 5224,
+      "duplicates": 5817
     },
     {
       "boardRef": "world-tour-grand@1",
       "players": 7,
-      "seeds": 100,
-      "finished": 30,
-      "accepted": 239314,
-      "refused": 86981,
-      "malformed": 4670,
-      "duplicates": 4919
+      "seeds": 120,
+      "finished": 38,
+      "accepted": 285145,
+      "refused": 103552,
+      "malformed": 5510,
+      "duplicates": 5865
     },
     {
       "boardRef": "world-tour-grand@1",
       "players": 8,
-      "seeds": 100,
-      "finished": 26,
-      "accepted": 249034,
-      "refused": 90376,
-      "malformed": 4893,
-      "duplicates": 5254
+      "seeds": 120,
+      "finished": 30,
+      "accepted": 300531,
+      "refused": 109093,
+      "malformed": 5985,
+      "duplicates": 6358
     },
     {
       "boardRef": "world-tour-grand@1",
       "players": 9,
-      "seeds": 100,
-      "finished": 11,
-      "accepted": 268013,
-      "refused": 97476,
-      "malformed": 5249,
-      "duplicates": 5531
+      "seeds": 120,
+      "finished": 18,
+      "accepted": 316517,
+      "refused": 114709,
+      "malformed": 6149,
+      "duplicates": 6528
     },
     {
       "boardRef": "world-tour-grand@1",
       "players": 10,
-      "seeds": 100,
-      "finished": 14,
-      "accepted": 268115,
-      "refused": 97503,
-      "malformed": 5097,
-      "duplicates": 5588
+      "seeds": 120,
+      "finished": 16,
+      "accepted": 322405,
+      "refused": 117048,
+      "malformed": 6146,
+      "duplicates": 6712
     }
   ],
   "failures": []
