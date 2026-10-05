@@ -18,6 +18,8 @@ gates are in `RELEASE-GATES.md`.
 
 Economy with the final mechanics (feeds QA-015): `GRAND-G.md`, 9/9 configurations inside the
 SPIKE-008 bands at 250 seeds.
+Rerun 2026-10-06 after the open timed auction: `PRODUCTION-SIMULATION.json` came out byte-identical
+(the bots value deeds the same way in either auction format), so 9/9 still pass.
 
 ## Live runs
 
@@ -56,3 +58,9 @@ laps decide the land). Before this the host always took seat 1. Decision: the ru
 random first player for every match (the order around the table is kept), so each player's chance
 of the edge is equal; starting cash stays uniform (owner decision, ARCHITECTURE-FREEZE section 11).
 How large the edge is with human players is a question for the GRAND-005 / QA-015 playtests.
+
+Live rerun 2026-10-06 (main 67d9eaf: open timed auction, random first player, 3D dice, sounds,
+new icons): `LIVE_FULL=1 LIVE_PLAYERS=4` played a complete match to the final standings in 589
+actions (3.1 minutes), all four clients converged after every action, then the rejoin and
+duplicate-tab checks passed. The same run confirmed the WebSocket close-code fix (no more
+`Invalid WebSocket close code: 1005` in the Worker log).
