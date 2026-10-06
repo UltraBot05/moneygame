@@ -352,7 +352,7 @@ function CenterStage(props: StageProps) {
   return (
     <div className="stage-pad">
       <div className="stage-head">
-        <span className="stage-brand">Money<span>·</span>Game</span>
+        <span className="stage-brand">Land<span>mark</span></span>
         <span className="label" style={{ color: "var(--on-slate-mute)" }}>{board.label}</span>
       </div>
       <div className="stage-mid">
@@ -770,7 +770,7 @@ export function Feed({ snapshot, client, board, room, spectator }: {
 export function TopBar({ room, boardLabel, center, right }: { room: RoomView; boardLabel: string; center: ReactNode; right: ReactNode }) {
   return (
     <header className="topbar">
-      <a className="brand" href="/">Money<span className="brand-dot">·</span>Game</a>
+      <a className="brand" href="/">Land<span className="brand-dot">mark</span></a>
       <span className="room-chip"><span className="label">Room</span><span className="code">{room.roomCode}</span></span>
       <div className="topbar-meta">
         <span>{boardLabel}</span><span className="topbar-sep" />

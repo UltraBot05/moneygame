@@ -17,8 +17,8 @@ async function noDocumentScroll(page: Page): Promise<void> {
 
 test("landing offers room creation and joining", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle("Money·Game");
-  await expect(page.locator("h1")).toContainText("Money");
+  await expect(page).toHaveTitle("Landmark");
+  await expect(page.locator("h1")).toContainText("Landmark");
   await expect(page.getByRole("button", { name: "Create a private room" })).toBeVisible();
   await page.getByLabel("Room code").fill("abc123");
   await page.getByRole("button", { name: "Join with a code" }).click();

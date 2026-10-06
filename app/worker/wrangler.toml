@@ -1,4 +1,6 @@
-name = "moneygame-worker"
+# Public name: Landmark. Free plan only (see RELEASE-GATES "Billing safety"): Workers Free,
+# SQLite-backed Durable Objects, D1 and static assets; nothing here needs a payment method.
+name = "landmark"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
@@ -21,7 +23,7 @@ run_worker_first = ["/api/*", "/auth/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "moneygame"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "19e66656-9be2-4fc0-ae34-50bff45efce2"
 migrations_dir = "migrations"
 
 # RT-001: one SQLite-backed GameRoom Durable Object per room code (reused across rematches).
@@ -34,19 +36,9 @@ class_name = "GameRoom"
 name = "AUTH_STORE"
 class_name = "AuthStore"
 
+# Durable Object classes (SQLite-backed, the only kind the Free plan allows). The `landmark`
+# Worker starts with this single migration; the spike-era history (SpikeRoom v1-v4) belonged to the
+# retired `moneygame-worker` script and is not replayed here.
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["SpikeRoom"]
-
-[[migrations]]
-tag = "v2"
-new_sqlite_classes = ["AuthStore"]
-
-[[migrations]]
-tag = "v3"
-new_sqlite_classes = ["GameRoom"]
-
-# RT-015: the SPIKE-001 measurement room (and its spike-only commands) is retired.
-[[migrations]]
-tag = "v4"
-deleted_classes = ["SpikeRoom"]
+new_sqlite_classes = ["AuthStore", "GameRoom"]
