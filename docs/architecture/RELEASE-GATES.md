@@ -3,6 +3,23 @@
 These gates need a human, a Cloudflare account with write access, or a legal decision. They are
 prepared here and **not** claimed as passed. Everything automatable already runs in CI.
 
+## Billing safety (owner requirement: the game must never bill)
+
+The deployment uses only Cloudflare's **Workers Free** plan, which has no meter: when a daily limit
+is reached, further requests fail until the next day (UTC); nothing is charged. Keep it that way:
+
+- Do **not** subscribe the account to Workers Paid or add a payment method for this project.
+- Use only free-plan features: Workers with static assets, **SQLite-backed** Durable Objects (every
+  migration uses `new_sqlite_classes`; key-value Durable Objects need a paid plan), and D1.
+- Do not add R2, Queues, Logpush, paid Workers Logs, Analytics Engine, Browser Rendering, Workers AI,
+  Hyperdrive or Smart Placement: each needs a paid plan or a payment method.
+- Free-plan limits at the time of writing (check Cloudflare's pricing pages): about 100,000 Worker
+  requests per day (static assets are free and unmetered), Durable Object requests and duration per
+  day, and D1 at 5 GB storage, 5 million rows read and 100,000 rows written per day. Abuse or a big
+  spike can therefore cause a temporary outage, never a bill.
+- Google sign-in uses a free OAuth client; no Google Cloud billing account or paid API is needed.
+- Domains: only free ones (`workers.dev`, or a free `eu.org` name pointed at Cloudflare's free DNS).
+
 ## QA-014 deploy and rollback
 
 Prerequisite: `npx wrangler login` with an account that can create D1 databases and deploy
@@ -13,6 +30,8 @@ Workers (the token used during development lacked D1 and Workers write scopes).
    cd app/worker && npx wrangler d1 create moneygame
    ```
    Put the printed `database_id` into `app/worker/wrangler.toml` (replacing the placeholder).
+   Done on 2026-10-06: `moneygame`, region APAC, id `19e66656-9be2-4fc0-ae34-50bff45efce2`; the
+   Worker is named `landmark`.
 2. Apply migrations to the remote database:
    ```bash
    npx wrangler d1 migrations apply moneygame --remote
@@ -52,7 +71,7 @@ Target from TASKS: at most 10% of quota for the expected load is desired; above 
 ## QA-010 public-release IP review (legal decision)
 
 Checklist for the reviewer:
-- Name and branding: "MONEY·GAME", original logo treatment in Archivo; no third-party marks.
+- Name and branding: "LANDMARK" (renamed from the working title MONEY·GAME on 2026-10-06), original two-tone wordmark in Archivo; no third-party marks.
 - Board vocabulary: START, HOLDING, VACATION, GO TO HOLDING, Surprise, Treasure, Customs;
   real city and transit hub names are used as places only.
 - Card text is original (`boards/world-tour/*.cards.json`).

@@ -1,4 +1,6 @@
-# MONEY·GAME
+# LANDMARK
+
+(Developed under the working title MONEY·GAME; the repository and package names keep it.)
 
 A free, browser-based, real-time property-trading board game for 3 to 10 players. Players buy
 world cities, complete country sets, build up to landmarks, trade, and bankrupt each other until

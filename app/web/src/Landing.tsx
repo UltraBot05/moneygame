@@ -10,7 +10,7 @@ import { initials, playerColor, type PlayerModel } from "./view-model";
 export function PageTop({ me, children }: { me: Me | null | undefined; children?: ReactNode }) {
   return (
     <header className="page-top">
-      <a className="brand" href="/">Money<span className="brand-dot">·</span>Game</a>
+      <a className="brand" href="/">Land<span className="brand-dot">mark</span></a>
       {children}
       <div className="topbar-right">
         {me === null && <a className="btn btn-slate" href={loginUrl(null)} style={{ textDecoration: "none" }}>Sign in with Google</a>}
@@ -57,7 +57,7 @@ export function Landing({ me, navigate }: { me: Me | null | undefined; navigate:
       <PageTop me={me} />
       <div className="hero">
         <section className="hero-left">
-          <h1 className="hero-title">Money<span style={{ color: "var(--brass-light)" }}>·</span>Game</h1>
+          <h1 className="hero-title">Land<span style={{ color: "var(--brass-light)" }}>mark</span></h1>
           <hr className="hero-rule" />
           <p style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.4, margin: 0, color: "var(--on-slate)" }}>
             Buy the world&apos;s cities, corner a country, and charge everyone else for the privilege.
